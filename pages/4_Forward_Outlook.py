@@ -23,6 +23,12 @@ from core.regime import detect_regime
 from core.signals import decide
 from core.stops import suggest as stops_suggest
 from core.technicals import snapshot as tech_snapshot
+from core.broker_links import (
+    broker_link,
+    confirmation_checklist,
+    order_ticket,
+    yahoo_chart_url,
+)
 from core.tickers import WATCHLIST
 from core.trade_walkthrough import generate as walkthrough_gen
 from ui_helpers import (
@@ -148,7 +154,34 @@ for c in go_signals:
         m3.metric("Stop-loss", aud(sig.suggested_stop_price))
         m4.metric("Confidence", f"{sig.confidence:.0%}")
 
-        with st.expander("How to actually place this trade"):
+        with st.expander("How to actually place this trade", expanded=True):
+            ticket = order_ticket(sig, t, shares=size.shares, spot_price_aud=c["spot"])
+            st.markdown("**Copy this order ticket** (click the icon at the top-right of the box):")
+            st.code(ticket, language="text")
+            st.caption(
+                "Paste this into your broker's order screen, your trade journal, "
+                "or a notes app for a paper trail."
+            )
+
+            link = broker_link(broker, t)
+            link_cols = st.columns(2)
+            with link_cols[0]:
+                st.link_button(link.label, link.url, use_container_width=True)
+                st.caption(link.note)
+            with link_cols[1]:
+                st.link_button(
+                    "View chart on Yahoo Finance",
+                    yahoo_chart_url(t),
+                    use_container_width=True,
+                )
+                st.caption("Independent sanity-check of price + recent news.")
+
+            st.markdown("**Pre-submit checks:**")
+            for check in confirmation_checklist(sig, t):
+                st.markdown(f"- {check}")
+
+            st.markdown("---")
+            st.markdown("**Detailed step-by-step:**")
             for step in wt.steps:
                 st.markdown(step)
             st.info(wt.summary)
