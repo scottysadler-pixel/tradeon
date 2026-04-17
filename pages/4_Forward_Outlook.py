@@ -17,7 +17,9 @@ from core.broker_links import (
     yahoo_chart_url,
 )
 from core.position_size import suggest as size_suggest
+from core.settings import from_session as enh_from_session
 from core.tickers import WATCHLIST
+from core.volatility import garch_position_multiplier
 from core.trade_walkthrough import generate as walkthrough_gen
 from ui_helpers import (
     aud,
@@ -33,6 +35,7 @@ page_setup("Forward Outlook")
 
 broker = st.session_state.get("broker", "Stake")
 capital = st.session_state.get("capital", 1000.0)
+enh = enh_from_session(st.session_state)
 
 st.markdown(
     "Stocks with currently active GO signals are listed below with a complete "
@@ -40,18 +43,25 @@ st.markdown(
     "the system only acts when multiple indicators agree."
 )
 
+if enh.any_active():
+    st.info(f"Active enhancements: **{enh.short_label()}** - signals reflect these toggles.")
+
 progress = st.progress(0.0, text="Scanning watchlist...")
 candidates: list[dict] = []
 for i, t in enumerate(WATCHLIST):
     progress.progress((i + 1) / len(WATCHLIST), text=f"Evaluating {t.symbol}...")
     try:
-        res = analyse_one(t.symbol, broker=broker)
+        res = analyse_one(
+            t.symbol, broker=broker,
+            enh_label=enh.short_label(), enh_garch=enh.use_garch,
+            enh_macro=enh.use_macro_confirm, enh_regime_grade=enh.use_regime_grade,
+        )
         if "error" not in res:
             candidates.append(res)
     except Exception as e:  # noqa: BLE001
         st.warning(f"{t.symbol}: {e}")
 progress.empty()
-mark_watchlist_warm(broker)
+mark_watchlist_warm(broker, enh)
 
 go_signals = [c for c in candidates if c["signal"] == "GO"]
 go_signals.sort(key=lambda c: c["signal_obj"].confidence, reverse=True)
@@ -101,13 +111,34 @@ for c in go_signals:
         st.plotly_chart(fig, use_container_width=True)
 
         size = size_suggest(capital_aud=capital, spot_price_aud=spot, df=c["df"])
+
+        # GARCH-aware sizing: shrink when storm expected, grow when calm expected
+        size_note = ""
+        if enh.use_garch and c.get("vol") is not None:
+            mult = garch_position_multiplier(c["vol"])
+            adj_aud = size.suggested_aud * mult
+            adj_shares = int(adj_aud // spot) if spot > 0 else 0
+            from core.position_size import PositionSize
+            size = PositionSize(
+                suggested_aud=adj_shares * spot,
+                shares=adj_shares,
+                pct_of_capital=(adj_shares * spot / capital) * 100 if capital else 0,
+                explanation=size.explanation + f" GARCH multiplier x{mult:.2f} applied.",
+            )
+            size_note = f" (GARCH x{mult:.2f})"
+
         wt = walkthrough_gen(sig, t, capital_aud=capital, broker=broker, spot_price_aud=spot)
 
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Expected return", pct(sig.expected_return_pct))
-        m2.metric("Position size", aud(size.suggested_aud), delta=f"{size.shares} shares")
+        m2.metric("Position size", aud(size.suggested_aud), delta=f"{size.shares} shares{size_note}")
         m3.metric("Stop-loss", aud(sig.suggested_stop_price))
         m4.metric("Confidence", f"{sig.confidence:.0%}")
+
+        if enh.use_garch and c.get("vol") is not None:
+            st.caption(f"Volatility forecast ({c['vol'].method}): {c['vol'].interpretation}")
+        if enh.use_macro_confirm and c.get("macro") is not None:
+            st.caption(f"Macro: {c['macro'].interpretation}")
 
         with st.expander("How to actually place this trade", expanded=True):
             ticket = order_ticket(sig, t, shares=size.shares, spot_price_aud=spot)

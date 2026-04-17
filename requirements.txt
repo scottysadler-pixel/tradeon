@@ -26,6 +26,7 @@ statsmodels>=0.14          # Holt-Winters, ARIMA, STL
 scikit-learn>=1.4          # metrics + scaling
 hmmlearn>=0.3              # regime detection
 prophet>=1.1.5             # best on big-tech names; Python 3.11/3.12 only
+arch>=6.3                  # GARCH(1,1) volatility forecasting (optional toggle)
 
 # Dev
 pytest>=8.0

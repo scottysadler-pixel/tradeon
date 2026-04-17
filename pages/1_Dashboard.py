@@ -12,6 +12,7 @@ import streamlit as st
 
 from app_pipeline import analyse_one, mark_watchlist_warm
 from core.analysis import stock_stats
+from core.settings import from_session as enh_from_session
 from core.tickers import WATCHLIST
 from ui_helpers import (
     grade_badge,
@@ -24,12 +25,24 @@ from ui_helpers import (
 
 page_setup("Dashboard")
 broker = st.session_state.get("broker", "Stake")
+enh = enh_from_session(st.session_state)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _enrich_with_stats(symbol: str, broker: str) -> dict:
+def _enrich_with_stats(
+    symbol: str,
+    broker: str,
+    enh_label: str,
+    enh_garch: bool,
+    enh_macro: bool,
+    enh_regime_grade: bool,
+) -> dict:
     """analyse_one() result enriched with descriptive stats for the table."""
-    base = analyse_one(symbol, broker=broker)
+    base = analyse_one(
+        symbol, broker=broker,
+        enh_label=enh_label, enh_garch=enh_garch,
+        enh_macro=enh_macro, enh_regime_grade=enh_regime_grade,
+    )
     if "error" in base:
         return base
     stats = stock_stats(base["df"])
@@ -66,11 +79,17 @@ errors: list[str] = []
 for i, t in enumerate(WATCHLIST):
     progress.progress((i + 1) / len(WATCHLIST), text=f"Analysing {t.symbol}...")
     try:
-        rows.append(_enrich_with_stats(t.symbol, broker))
+        rows.append(_enrich_with_stats(
+            t.symbol, broker,
+            enh.short_label(), enh.use_garch, enh.use_macro_confirm, enh.use_regime_grade,
+        ))
     except Exception as e:  # noqa: BLE001
         errors.append(f"{t.symbol}: {e}")
 progress.empty()
-mark_watchlist_warm(broker)
+mark_watchlist_warm(broker, enh)
+
+if enh.any_active():
+    st.info(f"Active enhancements: **{enh.short_label()}** - results below reflect these toggles. Adjust in Strategy Lab.")
 
 if errors:
     with st.expander(f"{len(errors)} symbol(s) failed to load"):

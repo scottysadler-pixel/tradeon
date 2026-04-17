@@ -10,6 +10,7 @@ import streamlit as st
 from app_pipeline import analyse_all, is_watchlist_warm
 from core.forecast import PROPHET_AVAILABLE
 from core.playbook import build as build_playbook
+from core.settings import from_session as enh_from_session
 from core.tickers import WATCHLIST
 from ui_helpers import broker_picker, capital_input, page_setup, render_disclaimer
 
@@ -30,6 +31,14 @@ with st.sidebar:
     # st.session_state["capital"]. Re-assigning it here would raise
     # StreamlitAPIException ("widget already created with this key").
 
+    enh = enh_from_session(st.session_state)
+    if enh.any_active():
+        st.markdown("**Active enhancements:**")
+        st.caption(f"`{enh.short_label()}`")
+        st.caption("Adjust in the Strategy Lab page.")
+    else:
+        st.caption("No enhancements active. Visit **Strategy Lab** to experiment.")
+
 # ----- Today's Playbook -----
 st.markdown("### Today's playbook")
 
@@ -40,8 +49,8 @@ _PLAYBOOK_BANNER_COLORS = {
     "info":  ("#3b82f6", "#ffffff"),
 }
 
-if is_watchlist_warm(broker):
-    rows = analyse_all(broker=broker)
+if is_watchlist_warm(broker, enh):
+    rows = analyse_all(broker=broker, enh=enh)
     pb = build_playbook(rows)
 
     bg, fg = _PLAYBOOK_BANNER_COLORS.get(pb.headline.accent, ("#94a3b8", "#0b1220"))
@@ -75,7 +84,7 @@ else:
     )
     if st.button("Compute playbook now", type="primary"):
         prog = st.progress(0.0, text="Crunching watchlist...")
-        analyse_all(broker=broker, progress=prog)
+        analyse_all(broker=broker, progress=prog, enh=enh)
         prog.empty()
         st.rerun()
 

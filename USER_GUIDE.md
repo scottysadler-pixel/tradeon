@@ -16,6 +16,7 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 4. [Reading a Deep Dive](#4-reading-a-deep-dive)
 5. [Using the Backtest Lab](#5-using-the-backtest-lab)
 6. [Acting on a GO signal](#6-acting-on-a-go-signal)
+6.5. [The Strategy Lab — toggling enhancements](#65-the-strategy-lab--toggling-enhancements)
 7. [The trust grade in plain English](#7-the-trust-grade-in-plain-english)
 8. [Common questions](#8-common-questions)
 9. [What to do if something looks broken](#9-what-to-do-if-something-looks-broken)
@@ -188,14 +189,17 @@ Workflow:
 1. Pick a stock.
 2. Pick a model. Start with `ensemble` (the default) — it's the one that powers the live signals. Try `naive` too as a sanity check — naive just predicts "tomorrow = today" with no logic.
 3. Pick a horizon (30 to 180 days). For your "buy now, sell in a few months" strategy, 60-90 days is the right range.
-4. Read the metrics:
+4. Pick a **history range**. The default ("All available, up to 60 folds") covers roughly the last 15 years of quarterly forecasts — so you can see what TRADEON would have predicted for early 2025 and check it against what actually happened. The "Last 5 years" option is faster but gives you only the most recent ~20 quarters.
+5. Read the metrics:
    - **MAPE** — average percentage error. Below 10% is decent for stocks. Above 25% means the model is essentially guessing.
    - **Directional** — what % of the time the model called the up/down direction correctly. Above 55% is meaningful.
    - **CI coverage** — what % of actuals fell within the model's stated confidence range. Closer to 80% is healthy.
    - **Paper-trade net AUD** — what you would have made/lost trading this every fold, after fees and tax.
-5. Look at the chart. Are predictions roughly tracking actuals, or are they all over the place?
+6. Look at the chart. Are predictions roughly tracking actuals, or are they all over the place? The "Coverage" caption tells you exactly which date range the chart covers.
 
 **Compare ensemble to naive on the same stock.** If naive's paper-trade return is similar to ensemble's, the model is adding nothing useful for that stock — its trust grade should be C or worse.
+
+> **Did the chart used to stop in 2018?** Yes — the v1 backtest defaulted to keeping only the *oldest* 20 folds. v1.2 changed this to keep the *most recent* 60 folds, so you now see predictions all the way up to the most recent completed quarter. If you only want a quick test, use the "Last 5 years" preset.
 
 ---
 
@@ -245,6 +249,47 @@ The **Trade Journal** page (left nav) is the right place to record this. Two flo
 The summary panel at the top of the Journal shows your **personal hit rate**, your **average days held**, your **TRADEON prediction error**, and most usefully — your **hit rate on trades you took AGAINST a WAIT signal**. That last metric is the truest test of "should I trust my gut over the system?"
 
 **Backup the journal regularly.** On Streamlit Cloud the data file can vanish on a redeploy or after the app sleeps. Use the Download button at the bottom of the Journal page to save a CSV copy to your laptop or tablet, then Upload to restore.
+
+---
+
+## 6.5. The Strategy Lab — toggling enhancements
+
+TRADEON v1.2 ships with three opt-in enhancements that change how signals are computed. They all default to **OFF** so you can compare against the baseline you trust. Each one earns its keep individually before you turn it on.
+
+### How to use the Strategy Lab
+
+1. Open the **Strategy Lab** page.
+2. Pick a stock you care about.
+3. Flip ONE toggle on, click **"Run comparison: ON vs OFF"**.
+4. Read the table — does the trust score lift by more than 5 points? Does the directional accuracy go up?
+5. Try the same toggle on a different stock. If it helps 4 out of 5 stocks, it's a real edge. If it helps only the one you tested, it's noise.
+6. When you're confident, click **"Apply globally"** — the rest of the app (Dashboard, Forward Outlook, Today's Playbook) will start using those toggles.
+
+You can always click **"Reset to vanilla"** to go back to v1 baseline behaviour.
+
+### What each toggle does
+
+**1. GARCH volatility forecast**
+- Forecasts the next 90 days of volatility using the GARCH(1,1) model — the same model professional risk desks use.
+- When ON: position sizes shrink when GARCH expects an above-trend storm and grow when it expects calm. CI bands also breathe.
+- Best for: spreading risk evenly across volatile and calm stocks.
+- Doesn't change the GO/WAIT decision itself — only what *size* you trade at.
+
+**2. Cross-asset confirmation**
+- Checks the parent index (S&P 500 for US, ASX 200 for ASX) and VIX (the US "fear index") before acting on a single-stock GO.
+- When ON: a GO signal gets downgraded to WAIT if the parent index is in a bear regime OR VIX > 30 ("panic").
+- Best for: avoiding the single biggest source of losses for short-term traders — getting steamrolled by a hostile overall market.
+- Never creates new GO signals — only suppresses risky ones.
+
+**3. Regime-stratified trust grade**
+- The vanilla trust grade averages performance across all historical regimes (bull, bear, sideways).
+- When ON: trust grade is computed only on past quarters whose start regime matches today's regime.
+- Best for: getting a more relevant honesty test when conditions today don't match the long-run average.
+- Falls back to the vanilla all-history grade if there are fewer than 5 same-regime folds available.
+
+### Honest expectations
+
+A combined lift of +5 to +15 trust points across the watchlist is a *very* good result. +20 or more is suspicious — check whether you're inadvertently overfitting to recent data. 0 or negative on most stocks means the toggle just isn't earning its keep — that's also useful information, and it's the system being honest with you.
 
 ---
 

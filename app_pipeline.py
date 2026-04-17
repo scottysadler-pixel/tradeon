@@ -7,6 +7,10 @@ the work pays the cost, all subsequent pages get instant cache hits.
 
 This module is allowed to import streamlit (for caching) but the heavy
 lifting still lives in the streamlit-free `core/` package.
+
+Enhancement toggles (GARCH, macro, regime-grade) are applied here so all
+pages see consistent results. Each toggle creates its own cache key so
+turning a toggle on/off doesn't invalidate the vanilla cache.
 """
 
 from __future__ import annotations
@@ -22,20 +26,40 @@ from core.earnings_proxy import detect as earnings_detect
 from core.forecast import ensemble_forecast, naive_forecast
 from core.fx import normalise_to_aud
 from core.hold_window import upcoming_window
+from core.macro import macro_blocks_go, macro_snapshot
 from core.regime import detect_regime
+from core.regime_grade import stratified_grade
+from core.settings import Enhancements, all_off
 from core.signals import decide
 from core.stops import suggest as stops_suggest
 from core.technicals import snapshot as tech_snapshot
 from core.tickers import WATCHLIST
+from core.volatility import VolatilityForecast, forecast_vol
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def analyse_one(symbol: str, broker: str = "Stake") -> dict[str, Any]:
+def analyse_one(
+    symbol: str,
+    broker: str = "Stake",
+    enh_label: str = "vanilla",
+    enh_garch: bool = False,
+    enh_macro: bool = False,
+    enh_regime_grade: bool = False,
+) -> dict[str, Any]:
     """Run the full per-stock pipeline. Cached for 1 hour, shared across pages.
 
-    Returns a dict with both summary fields (for Dashboard tables) and
-    rich objects (for Forward Outlook charts).
+    Toggles are passed as primitive booleans (not the Enhancements dataclass)
+    because @st.cache_data hashes args and frozen dataclasses don't always
+    play nicely with that. The bools become the cache key, so each toggle
+    combination has its own cache slot.
     """
+    enh = Enhancements(
+        use_garch=enh_garch,
+        use_macro_confirm=enh_macro,
+        use_regime_grade=enh_regime_grade,
+        label=enh_label,
+    )
+
     t = next(x for x in WATCHLIST if x.symbol == symbol)
     df_native = fetch_history(symbol, years=20, adjusted=True)
     df = normalise_to_aud(df_native, t)
@@ -46,11 +70,24 @@ def analyse_one(symbol: str, broker: str = "Stake") -> dict[str, Any]:
             "name": t.name,
             "ticker": t,
             "error": "Less than 5 years of data.",
+            "enhancements": enh,
         }
 
-    bt = backtest_all(df, horizon_days=90, market=t.market, broker=broker)
-    grade = trust_grade(bt)
+    # Use 20 most-recent folds (~5 years) for the live trust grade -
+    # this keeps the per-ticker run time manageable across the watchlist.
+    # The Backtest Lab can override max_folds for deeper history.
+    bt = backtest_all(df, horizon_days=90, market=t.market, broker=broker, max_folds=20)
     rg = detect_regime(df)
+
+    # Trust grade: vanilla OR regime-stratified depending on toggle
+    if enh.use_regime_grade:
+        srg = stratified_grade(df, bt, rg.label, horizon_days=90)
+        grade = srg.grade
+        regime_grade_obj: Any = srg
+    else:
+        grade = trust_grade(bt)
+        regime_grade_obj = None
+
     fcast = ensemble_forecast(df, horizon_days=90)
     naive = naive_forecast(df, horizon_days=90)
     snap = tech_snapshot(df)
@@ -59,12 +96,31 @@ def analyse_one(symbol: str, broker: str = "Stake") -> dict[str, Any]:
     stops = stops_suggest(df, hold_days=90, current_price=spot)
     hold = upcoming_window(df, current_month=datetime.today().month)
 
+    # GARCH forecast - always computed cheaply when toggle on, used downstream
+    vol: VolatilityForecast | None = None
+    if enh.use_garch:
+        vol = forecast_vol(df, horizon_days=90)
+
     naive_drift = ((float(naive.forecast_mean[-1]) / spot) - 1) * 100
     sig = decide(
         trust=grade, regime=rg, hold=hold, forecast=fcast,
         technicals=snap, earnings=earn, stops=stops,
         spot_price=spot, naive_baseline_drift_pct=naive_drift,
     )
+
+    # Macro confirmation overlay - only blocks GO signals, never creates new ones
+    macro = None
+    if enh.use_macro_confirm:
+        macro = macro_snapshot(t.market)
+        if sig.state == "GO" and macro_blocks_go(macro):
+            from core.signals import TradeSignal
+            sig = TradeSignal(
+                state="WAIT",
+                confidence=sig.confidence * 0.5,
+                headline=f"WAIT (macro override) - {macro.mood} cross-asset conditions.",
+                reasons=[macro.interpretation, *sig.reasons],
+            )
+
     expected_pct = ((float(fcast.forecast_mean[-1]) / spot) - 1) * 100
 
     return {
@@ -93,39 +149,57 @@ def analyse_one(symbol: str, broker: str = "Stake") -> dict[str, Any]:
         "ensemble_directional_pct": bt["ensemble"].directional_accuracy_pct,
         "naive_directional_pct": bt["naive"].directional_accuracy_pct,
         "hold_window": hold.description if hold else "(no active window)",
+        "enhancements": enh,
+        "vol": vol,
+        "macro": macro,
+        "regime_grade_obj": regime_grade_obj,
+        "backtest": bt,
     }
 
 
-def is_watchlist_warm(broker: str = "Stake") -> bool:
+def _enh_kwargs(enh: Enhancements) -> dict[str, Any]:
+    return {
+        "enh_label": enh.label or enh.short_label(),
+        "enh_garch": enh.use_garch,
+        "enh_macro": enh.use_macro_confirm,
+        "enh_regime_grade": enh.use_regime_grade,
+    }
+
+
+def is_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) -> bool:
     """Cheap check: has analyse_one been computed for every watchlist symbol?
 
-    Uses Streamlit's session_state - we set a flag once a full pass completes.
-    Survives page navigation within the same session, but resets on restart.
+    Per-broker per-toggle-combo flag. Survives page navigation within the
+    same session, resets on restart.
     """
-    return st.session_state.get(f"_pipeline_warm__{broker}", False)
+    e = enh or all_off()
+    return st.session_state.get(f"_pipeline_warm__{broker}__{e.short_label()}", False)
 
 
-def mark_watchlist_warm(broker: str = "Stake") -> None:
-    st.session_state[f"_pipeline_warm__{broker}"] = True
+def mark_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) -> None:
+    e = enh or all_off()
+    st.session_state[f"_pipeline_warm__{broker}__{e.short_label()}"] = True
 
 
 def analyse_all(
     broker: str = "Stake",
     progress: st.delta_generator.DeltaGenerator | None = None,
+    enh: Enhancements | None = None,
 ) -> list[dict[str, Any]]:
     """Run analyse_one for every watchlist symbol, returning results.
 
     Errors are captured per-symbol so one bad ticker doesn't kill the run.
-    Pass a progress widget to render incremental updates.
     """
+    e = enh or all_off()
+    kw = _enh_kwargs(e)
     rows: list[dict[str, Any]] = []
     n = len(WATCHLIST)
     for i, t in enumerate(WATCHLIST):
         if progress is not None:
             progress.progress((i + 1) / n, text=f"Analysing {t.symbol}...")
         try:
-            rows.append(analyse_one(t.symbol, broker=broker))
-        except Exception as e:  # noqa: BLE001
-            rows.append({"symbol": t.symbol, "name": t.name, "error": str(e)})
-    mark_watchlist_warm(broker)
+            rows.append(analyse_one(t.symbol, broker=broker, **kw))
+        except Exception as ex:  # noqa: BLE001
+            rows.append({"symbol": t.symbol, "name": t.name, "error": str(ex), "enhancements": e})
+    mark_watchlist_warm(broker, e)
     return rows

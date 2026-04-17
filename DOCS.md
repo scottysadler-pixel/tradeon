@@ -262,8 +262,24 @@ Most behaviour is parameterised. Common things to tweak:
 | **Learn** | Beginner education on broker accounts, order types, T+2 settlement, AU CGT, dividends, common mistakes, full glossary |
 | **Help** | The user guide rendered in-app for quick reference |
 | **Journal** | Log real trades + self-grade your hit rate vs TRADEON's predictions |
+| **Strategy Lab** | Toggle the three Tier-2 enhancements (GARCH / cross-asset / regime-stratified grade), run ON-vs-OFF backtest comparisons, apply globally |
 
 The pipeline that powers the Dashboard, Forward Outlook, and Today's Playbook is centralised in `app_pipeline.py:analyse_one()`. All three pages share a single `@st.cache_data` so the heavy backtest work is paid once per session and reused everywhere.
+
+Each enhancement toggle creates its own cache slot — `analyse_one()` is keyed on `(symbol, broker, enh_garch, enh_macro, enh_regime_grade)` — so flipping a toggle on the Strategy Lab triggers a one-time re-analysis with the new combination, then cached for an hour.
+
+### Tier-2 enhancement modules (v1.2)
+
+| Module | Toggle | Effect |
+|--------|--------|--------|
+| `core/volatility.py` | `use_garch` | GARCH(1,1) forecast → position-size multiplier in `[0.5, 1.5]` and CI band multiplier in `[0.7, 1.5]` |
+| `core/macro.py` | `use_macro_confirm` | Index regime + VIX → mood (`favourable`/`neutral`/`hostile`); GO downgraded to WAIT when `hostile` |
+| `core/regime_grade.py` | `use_regime_grade` | Replaces all-history trust grade with grade computed only on same-regime folds; falls back to vanilla when n < 5 |
+| `core/settings.py` | — | Frozen `Enhancements` dataclass + session-state plumbing (no streamlit import in core) |
+
+### Backtest fold coverage (v1.2 fix)
+
+`core/backtest._walk_forward_folds()` now defaults to `max_folds=60` and `prefer_recent=True`. Previously it was capped at 20 folds and kept the *oldest* folds, which meant a 20-year-old MSFT history showed predictions ending in ~2015. The pipeline used by the watchlist still passes `max_folds=20` to keep per-ticker run time manageable, but with `prefer_recent=True` those 20 folds are now the most recent ~5 years instead of the oldest 5. The Backtest Lab exposes the cap in its UI ("Last 5 years / Last 10 years / All available").
 
 ---
 
