@@ -85,8 +85,12 @@ for i, t in enumerate(WATCHLIST):
     try:
         rows.append(_enrich_with_stats(
             t.symbol, broker,
-            enh.short_label(), enh.use_garch, enh.use_macro_confirm, enh.use_regime_grade,
-            enh.use_recency_weighted, enh.use_drawdown_breaker,
+            getattr(enh, "short_label", lambda: "vanilla")(),
+            bool(getattr(enh, "use_garch", False)),
+            bool(getattr(enh, "use_macro_confirm", False)),
+            bool(getattr(enh, "use_regime_grade", False)),
+            bool(getattr(enh, "use_recency_weighted", False)),
+            bool(getattr(enh, "use_drawdown_breaker", False)),
         ))
     except Exception as e:  # noqa: BLE001
         errors.append(f"{t.symbol}: {e}")

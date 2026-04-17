@@ -118,17 +118,64 @@ def with_only(name: str) -> Enhancements:
 
 SESSION_KEY = "tradeon_enhancements"
 
+# Bumped whenever new fields are added to Enhancements. Stale objects with a
+# missing or older _schema_version are silently rebuilt with the new shape so
+# we never hand back an instance that callers expect to have new fields on.
+_SCHEMA_VERSION = 2
+
 
 def from_session(session_state) -> Enhancements:
     """Fetch the active Enhancements from streamlit's session_state.
 
+    Defensive against schema drift: if a stale `Enhancements` instance is
+    present (e.g. pickled by an older deploy that didn't have the v1.3 fields)
+    we rebuild it field-by-field via `getattr` with current defaults rather
+    than handing it back as-is. Otherwise downstream code crashes with
+    AttributeError on the missing fields.
+
     `session_state` is duck-typed so this stays import-free of streamlit.
     """
     val = session_state.get(SESSION_KEY) if hasattr(session_state, "get") else None
+    if val is None:
+        return all_off()
     if isinstance(val, Enhancements):
-        return val
+        # Fast path - already the current class with all current fields.
+        # We still rebuild defensively because `isinstance` returns True even
+        # when the class definition has been re-imported with new fields and
+        # the stored object was constructed under the older definition.
+        return _migrate(val)
+    # Anything else (dict, None, mangled state) -> safe defaults.
     return all_off()
+
+
+def _migrate(val: Enhancements) -> Enhancements:
+    """Rebuild an Enhancements from whatever attributes the stored object has.
+
+    Missing fields get the current default. Returns a fresh instance built
+    from the live class definition, so callers can safely access any field.
+    """
+    return Enhancements(
+        use_garch=bool(getattr(val, "use_garch", False)),
+        use_macro_confirm=bool(getattr(val, "use_macro_confirm", False)),
+        use_regime_grade=bool(getattr(val, "use_regime_grade", False)),
+        use_recency_weighted=bool(getattr(val, "use_recency_weighted", False)),
+        use_drawdown_breaker=bool(getattr(val, "use_drawdown_breaker", False)),
+        label=str(getattr(val, "label", "default") or "default"),
+    )
 
 
 def to_session(session_state, enhancements: Enhancements) -> None:
     session_state[SESSION_KEY] = enhancements
+
+
+def clear_session(session_state) -> None:
+    """Remove any stored Enhancements from session_state.
+
+    Used by the Strategy Lab "Clear cached settings" recovery button so the
+    user can flush a stale state without restarting the deploy.
+    """
+    if hasattr(session_state, "__delitem__") and SESSION_KEY in session_state:
+        try:
+            del session_state[SESSION_KEY]
+        except Exception:
+            session_state[SESSION_KEY] = all_off()

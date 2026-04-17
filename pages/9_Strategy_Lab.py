@@ -32,6 +32,7 @@ from core.settings import (
     SESSION_KEY,
     all_off,
     all_on,
+    clear_session as enh_clear_session,
     from_session as enh_from_session,
     to_session as enh_to_session,
     with_only,
@@ -55,6 +56,19 @@ with st.sidebar:
     st.caption(f"Active: `{current.short_label()}`")
     if current.any_active() and st.button("Reset to vanilla"):
         enh_to_session(st.session_state, all_off())
+        st.rerun()
+
+    st.divider()
+    st.markdown("**Recovery**")
+    st.caption(
+        "If you ever see an error like `'Enhancements' object has no attribute "
+        "...` after a redeploy, click below to wipe stale toggle state and "
+        "all cached results."
+    )
+    if st.button("Clear cached settings + cache"):
+        enh_clear_session(st.session_state)
+        st.cache_data.clear()
+        st.success("Cleared. Reloading...")
         st.rerun()
 
 # ----- Toggle controls -----
@@ -121,14 +135,29 @@ with row2[1]:
 with row2[2]:
     st.empty()
 
-candidate = Enhancements(
-    use_garch=use_garch,
-    use_macro_confirm=use_macro,
-    use_regime_grade=use_regime_grade,
-    use_recency_weighted=use_recency_weighted,
-    use_drawdown_breaker=use_drawdown_breaker,
-    label="lab-candidate",
-)
+try:
+    candidate = Enhancements(
+        use_garch=use_garch,
+        use_macro_confirm=use_macro,
+        use_regime_grade=use_regime_grade,
+        use_recency_weighted=use_recency_weighted,
+        use_drawdown_breaker=use_drawdown_breaker,
+        label="lab-candidate",
+    )
+except TypeError as e:
+    # If Streamlit Cloud has somehow loaded an older Enhancements class that
+    # doesn't have the v1.3 fields, give the user a clear, actionable error
+    # instead of a stack trace and stop the page cleanly.
+    st.error(
+        "**Stale code detected.** The deployed `Enhancements` class is missing "
+        "fields the UI expects. This usually means Streamlit Cloud is serving a "
+        "cached older build.\n\n"
+        "**Fix:** open the Streamlit Cloud dashboard for this app -> "
+        "**Manage app -> ... menu -> Reboot app**. If that doesn't help, "
+        "**Delete app** and redeploy from `main`.\n\n"
+        f"Internal detail: `{e}`"
+    )
+    st.stop()
 
 st.divider()
 

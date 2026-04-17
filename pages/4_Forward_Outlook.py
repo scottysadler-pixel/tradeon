@@ -51,13 +51,8 @@ candidates: list[dict] = []
 for i, t in enumerate(WATCHLIST):
     progress.progress((i + 1) / len(WATCHLIST), text=f"Evaluating {t.symbol}...")
     try:
-        res = analyse_one(
-            t.symbol, broker=broker,
-            enh_label=enh.short_label(), enh_garch=enh.use_garch,
-            enh_macro=enh.use_macro_confirm, enh_regime_grade=enh.use_regime_grade,
-            enh_recency_weighted=enh.use_recency_weighted,
-            enh_drawdown_breaker=enh.use_drawdown_breaker,
-        )
+        from app_pipeline import _enh_kwargs  # local import: defensive single source of truth
+        res = analyse_one(t.symbol, broker=broker, **_enh_kwargs(enh))
         if "error" not in res:
             candidates.append(res)
     except Exception as e:  # noqa: BLE001
@@ -116,7 +111,7 @@ for c in go_signals:
 
         # GARCH-aware sizing: shrink when storm expected, grow when calm expected
         size_note = ""
-        if enh.use_garch and c.get("vol") is not None:
+        if getattr(enh, "use_garch", False) and c.get("vol") is not None:
             mult = garch_position_multiplier(c["vol"])
             adj_aud = size.suggested_aud * mult
             adj_shares = int(adj_aud // spot) if spot > 0 else 0
@@ -137,13 +132,13 @@ for c in go_signals:
         m3.metric("Stop-loss", aud(sig.suggested_stop_price))
         m4.metric("Confidence", f"{sig.confidence:.0%}")
 
-        if enh.use_garch and c.get("vol") is not None:
+        if getattr(enh, "use_garch", False) and c.get("vol") is not None:
             st.caption(f"Volatility forecast ({c['vol'].method}): {c['vol'].interpretation}")
-        if enh.use_macro_confirm and c.get("macro") is not None:
+        if getattr(enh, "use_macro_confirm", False) and c.get("macro") is not None:
             st.caption(f"Macro: {c['macro'].interpretation}")
-        if enh.use_recency_weighted and c.get("recency_weights") is not None:
+        if getattr(enh, "use_recency_weighted", False) and c.get("recency_weights") is not None:
             st.caption(f"Forecast weighting: {c['recency_weights'].interpretation}")
-        if enh.use_drawdown_breaker and c.get("breaker") is not None:
+        if getattr(enh, "use_drawdown_breaker", False) and c.get("breaker") is not None:
             st.caption(f"Circuit-breaker: {c['breaker'].interpretation}")
 
         with st.expander("How to actually place this trade", expanded=True):

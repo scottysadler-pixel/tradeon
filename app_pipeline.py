@@ -192,13 +192,20 @@ def analyse_one(
 
 
 def _enh_kwargs(enh: Enhancements) -> dict[str, Any]:
+    """Convert an Enhancements bundle into the kwarg dict analyse_one() takes.
+
+    Uses `getattr` defensively for every field so a stale Enhancements object
+    (e.g. one pickled before the v1.3 fields existed and rehydrated from
+    session_state on a redeploy) doesn't crash the watchlist scan. Missing
+    fields safely default to OFF.
+    """
     return {
-        "enh_label": enh.label or enh.short_label(),
-        "enh_garch": enh.use_garch,
-        "enh_macro": enh.use_macro_confirm,
-        "enh_regime_grade": enh.use_regime_grade,
-        "enh_recency_weighted": enh.use_recency_weighted,
-        "enh_drawdown_breaker": enh.use_drawdown_breaker,
+        "enh_label": getattr(enh, "label", None) or getattr(enh, "short_label", lambda: "vanilla")(),
+        "enh_garch": bool(getattr(enh, "use_garch", False)),
+        "enh_macro": bool(getattr(enh, "use_macro_confirm", False)),
+        "enh_regime_grade": bool(getattr(enh, "use_regime_grade", False)),
+        "enh_recency_weighted": bool(getattr(enh, "use_recency_weighted", False)),
+        "enh_drawdown_breaker": bool(getattr(enh, "use_drawdown_breaker", False)),
     }
 
 

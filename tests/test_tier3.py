@@ -90,6 +90,52 @@ def test_session_round_trip_with_new_toggles():
     assert from_session(state) == e
 
 
+def test_from_session_migrates_stale_object_missing_new_fields():
+    """Defensive migration: a "stale" object missing v1.3 fields should be
+    silently rebuilt with safe defaults rather than handed back as-is.
+
+    This simulates the Streamlit Cloud failure mode where session_state
+    survived a redeploy and contains an instance pickled by an older class
+    definition. Without migration, downstream code crashes with
+    `AttributeError: 'Enhancements' object has no attribute 'use_recency_weighted'`.
+    """
+    class _StaleEnhancements:
+        # Mimics what an older deploy would have stored: only the v1.2 fields.
+        use_garch = True
+        use_macro_confirm = False
+        use_regime_grade = True
+        label = "stale-from-old-deploy"
+
+    state: dict = {"tradeon_enhancements": _StaleEnhancements()}
+    # The stale object is NOT an instance of the live Enhancements class, so
+    # from_session should fall back to all_off() (safe default) rather than
+    # crash on the missing isinstance attributes.
+    out = from_session(state)
+    assert isinstance(out, Enhancements)
+    assert out.use_garch is False
+    assert out.use_recency_weighted is False
+    assert out.use_drawdown_breaker is False
+
+
+def test_from_session_handles_corrupt_state():
+    """Anything other than an Enhancements -> safe defaults, no exception."""
+    for junk in [None, {}, "garbage", 42, [1, 2, 3]]:
+        state: dict = {"tradeon_enhancements": junk}
+        out = from_session(state)
+        assert isinstance(out, Enhancements)
+        assert out.any_active() is False
+
+
+def test_clear_session_removes_key():
+    from core.settings import clear_session
+    state: dict = {"tradeon_enhancements": Enhancements(use_garch=True)}
+    clear_session(state)
+    assert "tradeon_enhancements" not in state
+    # Idempotent.
+    clear_session(state)
+    assert "tradeon_enhancements" not in state
+
+
 # ----- Recency-weighted ensemble -----
 
 def test_compute_weights_falls_back_when_no_data():
