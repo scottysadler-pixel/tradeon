@@ -7,25 +7,13 @@ watchlist stock.
 
 from __future__ import annotations
 
-from datetime import datetime
-
 import pandas as pd
 import streamlit as st
 
-from core.analysis import pattern_strength, stock_stats
-from core.backtest import backtest_all, trust_grade
-from core.data import fetch_history
-from core.earnings_proxy import detect as earnings_detect
-from core.forecast import ensemble_forecast, naive_forecast
-from core.fx import normalise_to_aud
-from core.hold_window import upcoming_window
-from core.regime import detect_regime
-from core.signals import decide
-from core.stops import suggest as stops_suggest
-from core.technicals import snapshot as tech_snapshot
-from core.tickers import WATCHLIST, Ticker
+from app_pipeline import analyse_one, mark_watchlist_warm
+from core.analysis import stock_stats
+from core.tickers import WATCHLIST
 from ui_helpers import (
-    aud,
     grade_badge,
     page_setup,
     pct,
@@ -35,56 +23,22 @@ from ui_helpers import (
 )
 
 page_setup("Dashboard")
+broker = st.session_state.get("broker", "Stake")
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def analyse_one(symbol: str) -> dict:
-    """Heavy work for one ticker. Cached for 1 hour."""
-    t = next(x for x in WATCHLIST if x.symbol == symbol)
-    df_native = fetch_history(symbol, years=20, adjusted=True)
-    df = normalise_to_aud(df_native, t)
-    if len(df) < 252 * 5:
-        return {"symbol": symbol, "error": "Less than 5 years of data."}
-
-    stats = stock_stats(df)
-    bt = backtest_all(df, horizon_days=90, market=t.market, broker="Stake")
-    grade = trust_grade(bt)
-    regime = detect_regime(df)
-    fcast = ensemble_forecast(df, horizon_days=90)
-    naive = naive_forecast(df, horizon_days=90)
-    tech = tech_snapshot(df)
-    earnings = earnings_detect(df)
-    spot = float(df["close"].iloc[-1])
-    stops = stops_suggest(df, hold_days=90, current_price=spot)
-    hold = upcoming_window(df, current_month=datetime.today().month)
-
-    naive_drift = ((float(naive.forecast_mean[-1]) / spot) - 1) * 100
-    sig = decide(
-        trust=grade, regime=regime, hold=hold, forecast=fcast,
-        technicals=tech, earnings=earnings, stops=stops,
-        spot_price=spot, naive_baseline_drift_pct=naive_drift,
-    )
-
-    expected_pct = ((float(fcast.forecast_mean[-1]) / spot) - 1) * 100
+def _enrich_with_stats(symbol: str, broker: str) -> dict:
+    """analyse_one() result enriched with descriptive stats for the table."""
+    base = analyse_one(symbol, broker=broker)
+    if "error" in base:
+        return base
+    stats = stock_stats(base["df"])
     return {
-        "symbol": symbol,
-        "name": t.name,
-        "sector": t.sector,
-        "market": t.market,
-        "spot_aud": spot,
-        "trust_grade": grade.grade,
-        "trust_score": grade.score,
-        "regime": regime.label,
-        "signal": sig.state,
-        "signal_headline": sig.headline,
-        "expected_90d_pct": expected_pct,
+        **{k: v for k, v in base.items() if k != "df" and not k.endswith("_obj")},
         "pattern_strength": stats.pattern_strength,
         "cagr_pct": stats.cagr_pct,
         "vol_pct": stats.annualised_vol_pct,
         "max_dd_pct": stats.max_drawdown_pct,
-        "ensemble_directional_pct": bt["ensemble"].directional_accuracy_pct,
-        "naive_directional_pct": bt["naive"].directional_accuracy_pct,
-        "hold_window": hold.description if hold else "(no active window)",
     }
 
 
@@ -112,10 +66,11 @@ errors: list[str] = []
 for i, t in enumerate(WATCHLIST):
     progress.progress((i + 1) / len(WATCHLIST), text=f"Analysing {t.symbol}...")
     try:
-        rows.append(analyse_one(t.symbol))
+        rows.append(_enrich_with_stats(t.symbol, broker))
     except Exception as e:  # noqa: BLE001
         errors.append(f"{t.symbol}: {e}")
 progress.empty()
+mark_watchlist_warm(broker)
 
 if errors:
     with st.expander(f"{len(errors)} symbol(s) failed to load"):

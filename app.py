@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app_pipeline import analyse_all, is_watchlist_warm
 from core.forecast import PROPHET_AVAILABLE
+from core.playbook import build as build_playbook
 from core.tickers import WATCHLIST
 from ui_helpers import broker_picker, capital_input, page_setup, render_disclaimer
 
@@ -28,6 +30,56 @@ with st.sidebar:
     # st.session_state["capital"]. Re-assigning it here would raise
     # StreamlitAPIException ("widget already created with this key").
 
+# ----- Today's Playbook -----
+st.markdown("### Today's playbook")
+
+_PLAYBOOK_BANNER_COLORS = {
+    "go":    ("#22c55e", "#0b1220"),
+    "wait":  ("#94a3b8", "#0b1220"),
+    "avoid": ("#ef4444", "#ffffff"),
+    "info":  ("#3b82f6", "#ffffff"),
+}
+
+if is_watchlist_warm(broker):
+    rows = analyse_all(broker=broker)
+    pb = build_playbook(rows)
+
+    bg, fg = _PLAYBOOK_BANNER_COLORS.get(pb.headline.accent, ("#94a3b8", "#0b1220"))
+    st.markdown(
+        f"<div style='background:{bg};color:{fg};padding:14px 18px;"
+        f"border-radius:10px;margin-bottom:8px'>"
+        f"<div style='font-weight:700;font-size:1.05em'>{pb.headline.title}</div>"
+        f"<div style='margin-top:6px'>{pb.headline.body}</div></div>",
+        unsafe_allow_html=True,
+    )
+    pcols = st.columns(2)
+    with pcols[0]:
+        st.markdown("**Watchlist mood**")
+        st.markdown(pb.mood.description)
+        st.caption(
+            f"Bull: {pb.mood.bull} | Bear: {pb.mood.bear} | "
+            f"Sideways: {pb.mood.sideways}"
+        )
+    with pcols[1]:
+        st.markdown("**One to watch**")
+        if pb.watch:
+            st.markdown(pb.watch.text)
+        else:
+            st.caption("No standout seasonal windows on the watchlist right now.")
+    st.caption(f"Generated {pb.generated_at.strftime('%a %d %b %Y, %H:%M')}")
+else:
+    st.info(
+        "Today's playbook needs an analysis pass first. Click below or visit "
+        "the **Dashboard** to populate it. "
+        "First run takes 10-25 minutes; subsequent runs in this session are instant."
+    )
+    if st.button("Compute playbook now", type="primary"):
+        prog = st.progress(0.0, text="Crunching watchlist...")
+        analyse_all(broker=broker, progress=prog)
+        prog.empty()
+        st.rerun()
+
+st.markdown("---")
 st.markdown("### Welcome")
 st.markdown(
     """
