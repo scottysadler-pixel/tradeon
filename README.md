@@ -73,6 +73,13 @@ To then run TRADEON from your tablet, phone or any other browser (no laptop requ
 
 Optionally also point a Google Drive folder at the project root for a second copy.
 
+## Documentation
+
+- **[USER_GUIDE.md](./USER_GUIDE.md)** - plain-English user manual (also available in-app under the **Help** page; printable via Ctrl+P)
+- **[DOCS.md](./DOCS.md)** - technical reference: architecture, trust-grade math, every module explained
+- **[DEPLOY.md](./DEPLOY.md)** - step-by-step deploy to Streamlit Community Cloud for tablet access
+- **[IMPROVEMENTS.md](./IMPROVEMENTS.md)** - prioritised list of future enhancements (with deliberate restraint about what NOT to build)
+
 ## Disclaimer
 
 TRADEON produces statistical projections based on historical price data. It is not licensed financial advice. You are solely responsible for your investment decisions. Past performance does not guarantee future results. The author accepts no liability for losses.
