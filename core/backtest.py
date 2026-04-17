@@ -53,9 +53,19 @@ def _walk_forward_folds(
     train_min_days: int = 252 * 5,
     horizon_days: int = 90,
     step_days: int = 90,
-    max_folds: int = 20,
+    max_folds: int = 60,
+    prefer_recent: bool = True,
 ) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
-    """Generate (train, test) splits walking forward through history."""
+    """Generate (train, test) splits walking forward through history.
+
+    With 20 years of data, default settings (60 folds @ 90-day steps) cover
+    roughly 2010-Q3 through to the most recent completed quarter -
+    i.e. the most recent ~15 years of forecast-vs-actual comparisons.
+
+    `prefer_recent=True` means: if we generated more than `max_folds`
+    candidates, KEEP THE NEWEST. The old behaviour (kept the oldest) was
+    why the chart used to stop in 2015-2018 even on 2025 data.
+    """
     folds: list[tuple[pd.DataFrame, pd.DataFrame]] = []
     n = len(df)
     if n < train_min_days + horizon_days:
@@ -66,9 +76,8 @@ def _walk_forward_folds(
         test = df.iloc[start : start + horizon_days].reset_index(drop=True)
         folds.append((train, test))
         start += step_days
-        if len(folds) >= max_folds:
-            break
-    # Keep most recent (most representative) folds if we capped
+    if len(folds) > max_folds:
+        folds = folds[-max_folds:] if prefer_recent else folds[:max_folds]
     return folds
 
 
@@ -80,9 +89,16 @@ def backtest_model(
     market: str = "ASX",
     broker: str = "Stake",
     capital_aud: float = 1000.0,
+    max_folds: int = 60,
+    prefer_recent: bool = True,
 ) -> BacktestResult:
     """Run walk-forward backtest of a single forecasting model."""
-    folds = _walk_forward_folds(df, horizon_days=horizon_days)
+    folds = _walk_forward_folds(
+        df,
+        horizon_days=horizon_days,
+        max_folds=max_folds,
+        prefer_recent=prefer_recent,
+    )
     if not folds:
         return BacktestResult("(insufficient data)", 0, 0, 0, 0, 0, 0, 0, pd.DataFrame())
 
@@ -172,14 +188,20 @@ def backtest_all(
     horizon_days: int = 90,
     market: str = "ASX",
     broker: str = "Stake",
+    max_folds: int = 60,
+    prefer_recent: bool = True,
 ) -> dict[str, BacktestResult]:
     """Run all models and return a dict of results keyed by model name."""
+    kw = dict(
+        horizon_days=horizon_days, market=market, broker=broker,
+        max_folds=max_folds, prefer_recent=prefer_recent,
+    )
     return {
-        "naive":        backtest_model(df, naive_forecast, horizon_days=horizon_days, market=market, broker=broker),
-        "seasonal":     backtest_model(df, seasonal_naive_forecast, horizon_days=horizon_days, market=market, broker=broker),
-        "holt_winters": backtest_model(df, holt_winters_forecast, horizon_days=horizon_days, market=market, broker=broker),
-        "arima":        backtest_model(df, arima_forecast, horizon_days=horizon_days, market=market, broker=broker),
-        "ensemble":     backtest_model(df, ensemble_forecast, horizon_days=horizon_days, market=market, broker=broker),
+        "naive":        backtest_model(df, naive_forecast, **kw),
+        "seasonal":     backtest_model(df, seasonal_naive_forecast, **kw),
+        "holt_winters": backtest_model(df, holt_winters_forecast, **kw),
+        "arima":        backtest_model(df, arima_forecast, **kw),
+        "ensemble":     backtest_model(df, ensemble_forecast, **kw),
     }
 
 

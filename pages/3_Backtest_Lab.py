@@ -31,7 +31,7 @@ st.markdown(
 ticker = ticker_picker(default="MSFT", key="bt_ticker")
 broker = st.session_state.get("broker", "Stake")
 
-c1, c2 = st.columns(2)
+c1, c2, c3 = st.columns(3)
 with c1:
     model_key = st.selectbox(
         "Model",
@@ -40,6 +40,22 @@ with c1:
     )
 with c2:
     horizon = st.slider("Forecast horizon (days)", 30, 180, 90)
+with c3:
+    coverage = st.selectbox(
+        "History to test",
+        ["Last 5 years (~20 folds)", "Last 10 years (~40 folds)", "All available (up to 60 folds)"],
+        index=2,
+        help=(
+            "How much of the past to replay. The lab walks forward in 90-day "
+            "steps; more folds = more honest stress-test, but takes longer."
+        ),
+    )
+
+_FOLD_CAP = {
+    "Last 5 years (~20 folds)": 20,
+    "Last 10 years (~40 folds)": 40,
+    "All available (up to 60 folds)": 60,
+}[coverage]
 
 MODEL_MAP = {
     "naive": naive_forecast,
@@ -59,10 +75,11 @@ def get_df(symbol: str) -> pd.DataFrame:
 
 df = get_df(ticker.symbol)
 
-with st.spinner(f"Backtesting {model_key} on {ticker.symbol}..."):
+with st.spinner(f"Backtesting {model_key} on {ticker.symbol} ({_FOLD_CAP} folds)..."):
     result = backtest_model(
         df, MODEL_MAP[model_key],
         horizon_days=horizon, market=ticker.market, broker=broker,
+        max_folds=_FOLD_CAP, prefer_recent=True,
     )
 
 st.markdown(f"#### Results: {result.model_name}")
@@ -72,6 +89,15 @@ m2.metric("MAPE", f"{result.mape_pct:.2f}%")
 m3.metric("Directional", f"{result.directional_accuracy_pct:.1f}%")
 m4.metric("CI coverage", f"{result.ci_coverage_pct:.1f}%")
 m5.metric("Paper-trade net AUD", f"{result.paper_trade_net_return_pct_aud:+.1f}%")
+
+if not result.sample_predictions.empty:
+    sp_dates = pd.to_datetime(result.sample_predictions["fold_end"])
+    st.caption(
+        f"Coverage: {sp_dates.min():%Y-%m-%d} to {sp_dates.max():%Y-%m-%d} "
+        f"({len(sp_dates)} fold ends). Each point = a real historical date "
+        "where the model was trained ONLY on data before it, then asked "
+        f"\"where will price be in {horizon} days?\""
+    )
 
 st.markdown("##### Predictions vs actuals")
 sp = result.sample_predictions
