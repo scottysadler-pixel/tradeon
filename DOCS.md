@@ -266,7 +266,7 @@ Most behaviour is parameterised. Common things to tweak:
 
 The pipeline that powers the Dashboard, Forward Outlook, and Today's Playbook is centralised in `app_pipeline.py:analyse_one()`. All three pages share a single `@st.cache_data` so the heavy backtest work is paid once per session and reused everywhere.
 
-Each enhancement toggle creates its own cache slot — `analyse_one()` is keyed on `(symbol, broker, enh_garch, enh_macro, enh_regime_grade)` — so flipping a toggle on the Strategy Lab triggers a one-time re-analysis with the new combination, then cached for an hour.
+Each enhancement toggle creates its own cache slot — `analyse_one()` is keyed on `(symbol, broker, enh_garch, enh_macro, enh_regime_grade, enh_recency_weighted, enh_drawdown_breaker)` — so flipping a toggle on the Strategy Lab triggers a one-time re-analysis with the new combination, then cached for an hour.
 
 ### Tier-2 enhancement modules (v1.2)
 
@@ -276,6 +276,15 @@ Each enhancement toggle creates its own cache slot — `analyse_one()` is keyed 
 | `core/macro.py` | `use_macro_confirm` | Index regime + VIX → mood (`favourable`/`neutral`/`hostile`); GO downgraded to WAIT when `hostile` |
 | `core/regime_grade.py` | `use_regime_grade` | Replaces all-history trust grade with grade computed only on same-regime folds; falls back to vanilla when n < 5 |
 | `core/settings.py` | — | Frozen `Enhancements` dataclass + session-state plumbing (no streamlit import in core) |
+
+### Tier-3 enhancement modules (v1.3)
+
+| Module | Toggle | Effect |
+|--------|--------|--------|
+| `core/forecast_weighted.py` | `use_recency_weighted` | Computes inverse-MAPE weights from the last `lookback_folds=5` walk-forward folds for each ensemble sub-model, then calls `ensemble_forecast(weights=...)`. Models without backtest data (Prophet) keep their 1/N share. Per-model weights capped at 70% / floored at 5%. Zero extra compute — re-uses `backtest_all` output. |
+| `core/circuit_breaker.py` | `use_drawdown_breaker` | Pure function on a price df: `check_drawdown(df, window_days=30, threshold_pct=15)` returns a `CircuitBreakerStatus`. When `triggered=True` and the live signal is GO, `app_pipeline.analyse_one` downgrades it to WAIT with the breaker's interpretation prepended to the reasons list. Never creates new GOs. |
+
+Both layer on top of the existing pipeline cleanly: recency-weighting changes the **forecast input** to `decide()`, the drawdown breaker is a **post-decision filter** like macro confirmation. Each gets its own cache slot in `analyse_one` (the `enh_recency_weighted` and `enh_drawdown_breaker` bools join the existing cache key).
 
 ### Backtest fold coverage (v1.2 fix)
 

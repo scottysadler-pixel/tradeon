@@ -16,7 +16,13 @@ import streamlit as st
 
 from app_pipeline import analyse_one
 from core.backtest import backtest_all, trust_grade
+from core.circuit_breaker import (
+    DEFAULT_THRESHOLD_PCT,
+    DEFAULT_WINDOW_DAYS,
+    check_drawdown,
+)
 from core.data import fetch_history
+from core.forecast_weighted import compute_recency_weights
 from core.fx import normalise_to_aud
 from core.macro import macro_snapshot
 from core.regime import detect_regime
@@ -54,8 +60,8 @@ with st.sidebar:
 # ----- Toggle controls -----
 st.markdown("### Enhancements")
 
-c1, c2, c3 = st.columns(3)
-with c1:
+row1 = st.columns(3)
+with row1[0]:
     use_garch = st.toggle(
         "1. GARCH volatility",
         value=False,
@@ -67,7 +73,7 @@ with c1:
     )
     if not is_arch_available():
         st.caption(":warning: `arch` package not installed - falls back to rolling stdev.")
-with c2:
+with row1[1]:
     use_macro = st.toggle(
         "2. Cross-asset confirmation",
         value=False,
@@ -77,7 +83,7 @@ with c2:
             "(bear index OR VIX > 30)."
         ),
     )
-with c3:
+with row1[2]:
     use_regime_grade = st.toggle(
         "3. Regime-stratified trust grade",
         value=False,
@@ -88,10 +94,39 @@ with c3:
         ),
     )
 
+row2 = st.columns(3)
+with row2[0]:
+    use_recency_weighted = st.toggle(
+        "4. Recency-weighted ensemble",
+        value=False,
+        help=(
+            "Weights the prophet/holt-winters/arima ensemble by each model's MAPE "
+            "over the LAST 5 walk-forward folds, instead of equal 1/3 weighting. "
+            "The model that has been most accurate recently dominates the next "
+            "forecast. Cheap (re-uses existing backtest data)."
+        ),
+    )
+with row2[1]:
+    use_drawdown_breaker = st.toggle(
+        "5. Drawdown circuit-breaker",
+        value=False,
+        help=(
+            f"Hard safety rule: if a stock has fallen more than "
+            f"{DEFAULT_THRESHOLD_PCT:.0f}% from its peak in the last "
+            f"{DEFAULT_WINDOW_DAYS} trading days, force any GO signal to WAIT. "
+            "Catches falling-knife situations that statistical models systematically "
+            "misjudge."
+        ),
+    )
+with row2[2]:
+    st.empty()
+
 candidate = Enhancements(
     use_garch=use_garch,
     use_macro_confirm=use_macro,
     use_regime_grade=use_regime_grade,
+    use_recency_weighted=use_recency_weighted,
+    use_drawdown_breaker=use_drawdown_breaker,
     label="lab-candidate",
 )
 
@@ -168,6 +203,49 @@ if st.button("Run comparison: ON vs OFF", type="primary"):
                     f"Macro mood: **{macro.mood}**. "
                     f"{'Would BLOCK live GO signal.' if macro.mood == 'hostile' else 'Would NOT block live GO signal.'} "
                     f"{macro.interpretation}"
+                ),
+            })
+
+        # Recency-weighted ensemble: re-runs the backtest with the new weights
+        # so we can show a real lift number (not just "unchanged").
+        if use_recency_weighted:
+            rw = compute_recency_weights(bt, lookback_folds=5)
+            from core.backtest import backtest_model
+            from core.forecast import ensemble_forecast as _ens
+
+            def _weighted_fn(_df, horizon_days=90, _w=rw.weights):
+                return _ens(_df, horizon_days=horizon_days, weights=_w)
+
+            bt_w = backtest_model(
+                df, _weighted_fn, horizon_days=90, market=t.market,
+                broker=broker, max_folds=40, prefer_recent=True,
+            )
+            bt_for_grade = {**bt, "ensemble": bt_w}
+            grade_w = trust_grade(bt_for_grade)
+            weight_str = ", ".join(f"{k}={v:.0%}" for k, v in rw.weights.items())
+            rows.append({
+                "Configuration": "+ recency-weighted",
+                "Trust grade": grade_w.grade,
+                "Trust score": f"{grade_w.score:.0f}",
+                "Directional %": f"{bt_w.directional_accuracy_pct:.1f}",
+                "MAPE %": f"{bt_w.mape_pct:.2f}",
+                "Net AUD %": f"{bt_w.paper_trade_net_return_pct_aud:+.1f}",
+                "Notes": f"Weights: {weight_str}. {rw.interpretation}",
+            })
+
+        # Drawdown circuit-breaker
+        if use_drawdown_breaker:
+            br = check_drawdown(df)
+            rows.append({
+                "Configuration": "+ drawdown breaker",
+                "Trust grade": "(unchanged)",
+                "Trust score": "(unchanged)",
+                "Directional %": "(unchanged)",
+                "MAPE %": "(unchanged)",
+                "Net AUD %": "(unchanged)",
+                "Notes": (
+                    f"Status: **{'TRIGGERED' if br.triggered else 'idle'}**. "
+                    f"{br.interpretation}"
                 ),
             })
 
@@ -261,6 +339,28 @@ with st.expander("What does each toggle actually do under the hood?"):
 - For the trust grade, uses ONLY folds whose start-regime matches today's regime.
 - When fewer than 5 same-regime folds exist, falls back to vanilla all-history.
 - Cost: zero extra compute - reuses existing backtest output.
+
+**4. Recency-weighted ensemble (`core/forecast_weighted.py`)**
+- Looks at MAPE on the last 5 walk-forward folds for holt-winters and arima
+  individually (data we already computed in the main backtest).
+- Computes weight ∝ 1 / mean(|err|), then caps each weight at 70% so no single
+  model can dominate, and floors at 5% so no model is silenced entirely.
+- Prophet has no per-fold backtest data (too slow inside the live walk-forward),
+  so it keeps a neutral 1/3 share - we don't penalise a model we can't measure.
+- The new weights are passed straight to the existing `ensemble_forecast(weights=...)`,
+  so this is genuinely a "free" enhancement: same models, same data, just smarter
+  averaging.
+- Cost: zero extra compute - reuses existing backtest output.
+
+**5. Drawdown circuit-breaker (`core/circuit_breaker.py`)**
+- Looks at the latest close vs the maximum close in the last 30 trading days.
+- If down more than 15%, the breaker trips: any GO signal is forced down to WAIT.
+- Pure safety filter - never creates a new GO, only suppresses one.
+- Reasoning: statistical models trained on price returns systematically misjudge
+  falling-knife situations (think MSFT, CSL, META over Feb-Mar 2026). The breaker
+  is a hard rule that overrides the forecast when the recent price action is
+  saying "something has changed".
+- Cost: a single max() and division - effectively free.
     """)
 
 render_disclaimer()

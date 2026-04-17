@@ -21,9 +21,11 @@ from typing import Any
 import streamlit as st
 
 from core.backtest import backtest_all, trust_grade
+from core.circuit_breaker import CircuitBreakerStatus, check_drawdown
 from core.data import fetch_history
 from core.earnings_proxy import detect as earnings_detect
 from core.forecast import ensemble_forecast, naive_forecast
+from core.forecast_weighted import RecencyWeights, recency_weighted_forecast
 from core.fx import normalise_to_aud
 from core.hold_window import upcoming_window
 from core.macro import macro_blocks_go, macro_snapshot
@@ -45,6 +47,8 @@ def analyse_one(
     enh_garch: bool = False,
     enh_macro: bool = False,
     enh_regime_grade: bool = False,
+    enh_recency_weighted: bool = False,
+    enh_drawdown_breaker: bool = False,
 ) -> dict[str, Any]:
     """Run the full per-stock pipeline. Cached for 1 hour, shared across pages.
 
@@ -57,6 +61,8 @@ def analyse_one(
         use_garch=enh_garch,
         use_macro_confirm=enh_macro,
         use_regime_grade=enh_regime_grade,
+        use_recency_weighted=enh_recency_weighted,
+        use_drawdown_breaker=enh_drawdown_breaker,
         label=enh_label,
     )
 
@@ -88,7 +94,16 @@ def analyse_one(
         grade = trust_grade(bt)
         regime_grade_obj = None
 
-    fcast = ensemble_forecast(df, horizon_days=90)
+    # Recency-weighted ensemble (toggle #4) reuses the bt results we just
+    # computed - no extra fitting cost. Falls back to vanilla equal-weight
+    # internally if there isn't enough fold data.
+    recency_weights: RecencyWeights | None = None
+    if enh.use_recency_weighted:
+        fcast, recency_weights = recency_weighted_forecast(
+            df, bt, horizon_days=90,
+        )
+    else:
+        fcast = ensemble_forecast(df, horizon_days=90)
     naive = naive_forecast(df, horizon_days=90)
     snap = tech_snapshot(df)
     earn = earnings_detect(df)
@@ -119,6 +134,23 @@ def analyse_one(
                 confidence=sig.confidence * 0.5,
                 headline=f"WAIT (macro override) - {macro.mood} cross-asset conditions.",
                 reasons=[macro.interpretation, *sig.reasons],
+            )
+
+    # Drawdown circuit-breaker (toggle #5). Layers on AFTER macro because we
+    # want both safety filters to be able to suppress a GO independently.
+    breaker: CircuitBreakerStatus | None = None
+    if enh.use_drawdown_breaker:
+        breaker = check_drawdown(df)
+        if breaker.triggered and sig.state == "GO":
+            from core.signals import TradeSignal
+            sig = TradeSignal(
+                state="WAIT",
+                confidence=sig.confidence * 0.5,
+                headline=(
+                    f"WAIT (drawdown breaker) - {breaker.drawdown_pct:.1f}% off "
+                    f"{breaker.window_days}-day peak."
+                ),
+                reasons=[breaker.interpretation, *sig.reasons],
             )
 
     expected_pct = ((float(fcast.forecast_mean[-1]) / spot) - 1) * 100
@@ -154,6 +186,8 @@ def analyse_one(
         "macro": macro,
         "regime_grade_obj": regime_grade_obj,
         "backtest": bt,
+        "recency_weights": recency_weights,
+        "breaker": breaker,
     }
 
 
@@ -163,6 +197,8 @@ def _enh_kwargs(enh: Enhancements) -> dict[str, Any]:
         "enh_garch": enh.use_garch,
         "enh_macro": enh.use_macro_confirm,
         "enh_regime_grade": enh.use_regime_grade,
+        "enh_recency_weighted": enh.use_recency_weighted,
+        "enh_drawdown_breaker": enh.use_drawdown_breaker,
     }
 
 

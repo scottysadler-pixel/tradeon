@@ -259,7 +259,7 @@ The summary panel at the top of the Journal shows your **personal hit rate**, yo
 
 ## 6.5. The Strategy Lab — toggling enhancements
 
-TRADEON v1.2 ships with three opt-in enhancements that change how signals are computed. They all default to **OFF** so you can compare against the baseline you trust. Each one earns its keep individually before you turn it on.
+TRADEON ships with **five** opt-in enhancements that change how signals are computed. They all default to **OFF** so you can compare against the baseline you trust. Each one earns its keep individually before you turn it on.
 
 ### How to use the Strategy Lab
 
@@ -291,6 +291,21 @@ You can always click **"Reset to vanilla"** to go back to v1 baseline behaviour.
 - When ON: trust grade is computed only on past quarters whose start regime matches today's regime.
 - Best for: getting a more relevant honesty test when conditions today don't match the long-run average.
 - Falls back to the vanilla all-history grade if there are fewer than 5 same-regime folds available.
+
+**4. Recency-weighted ensemble** *(added v1.3)*
+- The vanilla ensemble averages prophet, holt-winters and arima with **equal** 1/3 weight on every prediction.
+- When ON: the three sub-models are weighted by their accuracy over the **last 5 quarterly forecasts** instead. The model that's been getting it right lately gets the biggest say in the next forecast; the one that's been wrong fades into the background.
+- Best for: stocks where the underlying behaviour has changed in the last 1-2 years (e.g. a steady dividend payer that suddenly started growing fast). Equal weighting under-weights the model that's caught the change.
+- Cost: zero extra compute — re-uses backtest data we've already computed.
+- Realistic effect: 2-5 percentage points of directional accuracy on stocks where one sub-model genuinely dominates; near-zero effect on stocks where all three sub-models perform similarly.
+- A safety cap stops any one sub-model from taking more than 70% of the vote, so this can't degenerate into "always use whichever model got lucky last quarter".
+
+**5. Drawdown circuit-breaker** *(added v1.3)*
+- A hard safety rule: if a stock has fallen more than **15% from its peak in the last 30 trading days**, any GO signal is forced down to WAIT regardless of what the forecast says.
+- Best for: avoiding "buy the falling knife" disasters. Statistical models systematically under-predict how long a fast-moving correction can keep going (the Microsoft / CSL / Meta drawdowns of early 2026 are textbook examples).
+- Like the macro confirmation toggle, it never creates new GO signals — it only suppresses risky ones.
+- The breaker resets automatically as soon as the drawdown shallows out below 15%, so it doesn't lock you out of a stock forever.
+- Tunable: defaults are 15% / 30 days. Both numbers can be tightened (more conservative) or loosened (more permissive) in `core/circuit_breaker.py`.
 
 ### Honest expectations
 

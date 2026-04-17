@@ -55,6 +55,8 @@ for i, t in enumerate(WATCHLIST):
             t.symbol, broker=broker,
             enh_label=enh.short_label(), enh_garch=enh.use_garch,
             enh_macro=enh.use_macro_confirm, enh_regime_grade=enh.use_regime_grade,
+            enh_recency_weighted=enh.use_recency_weighted,
+            enh_drawdown_breaker=enh.use_drawdown_breaker,
         )
         if "error" not in res:
             candidates.append(res)
@@ -139,6 +141,10 @@ for c in go_signals:
             st.caption(f"Volatility forecast ({c['vol'].method}): {c['vol'].interpretation}")
         if enh.use_macro_confirm and c.get("macro") is not None:
             st.caption(f"Macro: {c['macro'].interpretation}")
+        if enh.use_recency_weighted and c.get("recency_weights") is not None:
+            st.caption(f"Forecast weighting: {c['recency_weights'].interpretation}")
+        if enh.use_drawdown_breaker and c.get("breaker") is not None:
+            st.caption(f"Circuit-breaker: {c['breaker'].interpretation}")
 
         with st.expander("How to actually place this trade", expanded=True):
             ticket = order_ticket(sig, t, shares=size.shares, spot_price_aud=spot)

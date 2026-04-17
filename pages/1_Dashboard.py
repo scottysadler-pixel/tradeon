@@ -36,12 +36,16 @@ def _enrich_with_stats(
     enh_garch: bool,
     enh_macro: bool,
     enh_regime_grade: bool,
+    enh_recency_weighted: bool,
+    enh_drawdown_breaker: bool,
 ) -> dict:
     """analyse_one() result enriched with descriptive stats for the table."""
     base = analyse_one(
         symbol, broker=broker,
         enh_label=enh_label, enh_garch=enh_garch,
         enh_macro=enh_macro, enh_regime_grade=enh_regime_grade,
+        enh_recency_weighted=enh_recency_weighted,
+        enh_drawdown_breaker=enh_drawdown_breaker,
     )
     if "error" in base:
         return base
@@ -82,6 +86,7 @@ for i, t in enumerate(WATCHLIST):
         rows.append(_enrich_with_stats(
             t.symbol, broker,
             enh.short_label(), enh.use_garch, enh.use_macro_confirm, enh.use_regime_grade,
+            enh.use_recency_weighted, enh.use_drawdown_breaker,
         ))
     except Exception as e:  # noqa: BLE001
         errors.append(f"{t.symbol}: {e}")
