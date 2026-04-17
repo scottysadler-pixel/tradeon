@@ -101,6 +101,18 @@ You're done with first-time setup.
 
 ---
 
+## 2.5 The "Today's Playbook" panel
+
+Once the Dashboard has been run at least once in your current browser session, the landing page automatically shows a **Today's Playbook** panel at the top. It's the fastest way to answer "what should I look at right now?" without scrolling through 21 watchlist rows.
+
+The panel has three parts:
+
+- **Headline banner** (green/grey/red) — the single best GO opportunity right now, OR a friendly "no GO signals, sit tight" with a runner-up to keep an eye on.
+- **Watchlist mood** — bull / bear / sideways count across all 21 stocks. If more than half are in bear, it explicitly tells you the market is defensive and GO signals will be sparse.
+- **One to watch** — the most promising currently-active seasonal hold-window that hasn't quite triggered a full GO yet. A "watch this in case other conditions line up" pointer.
+
+If you land on the home page before the Dashboard has run in this session, you'll see a "Compute playbook now" button instead — it triggers the same heavy first-load work the Dashboard does.
+
 ## 3. Reading the Dashboard
 
 The Dashboard is your daily glance. Every column tells you something specific.
@@ -203,11 +215,18 @@ The day will come when you visit the Forward Outlook page and see a GO signal. H
 
 ### Place the trade
 
-1. Open your broker's app (CommSec, Stake, Pearler, SelfWealth — whichever you set in the sidebar).
-2. Search for the symbol shown in the Forward Outlook plan.
-3. Use a **limit order** at the suggested entry price (not a market order). The "How to actually place this trade" section in Forward Outlook gives you the exact wording.
-4. Set the **stop-loss** at the level TRADEON suggests. Most brokers let you attach this to the order, or place a separate conditional sell order immediately after the buy fills.
-5. Note the suggested **exit date** in your calendar. Set a reminder.
+The Forward Outlook page now includes three convenience features in the **"How to actually place this trade"** panel:
+
+- **Clipboard order ticket** — a single line like `LIMIT BUY 12 MSFT @ A$612.50 | stop @ A$580 | target exit 2026-07-15` that you can copy with one click and paste into your broker's order screen or your trade journal.
+- **Open [broker]** button — opens your selected broker's site in a new tab. (We don't auto-search the symbol because broker URL formats change without notice; the button takes you to the broker's home page where you search.)
+- **View chart on Yahoo Finance** button — a sanity-check tab that reliably opens the symbol's chart, useful for confirming you've got the right ticker and seeing the latest news.
+
+Then in your broker's app:
+
+1. Search for the symbol from the order ticket.
+2. Use a **limit order** at the suggested entry price (not a market order).
+3. Set the **stop-loss** at the level TRADEON suggests. Most brokers let you attach this to the order, or place a separate conditional sell order immediately after the buy fills.
+4. Note the suggested **exit date** in your calendar. Set a reminder.
 
 ### Manage the trade
 
@@ -218,9 +237,14 @@ The day will come when you visit the Forward Outlook page and see a GO signal. H
 
 ### After the trade
 
-- Note the actual AUD outcome.
-- Compare it to TRADEON's predicted outcome.
-- If TRADEON's prediction was way off, drop a note somewhere — over time you build a sense of how much trust to give the system on that stock.
+The **Trade Journal** page (left nav) is the right place to record this. Two flows:
+
+- **When you BUY** — open the Journal, pick "Open new trade (buy)", fill in ticker, buy date, price per share, shares. Optionally record what TRADEON's signal and predicted % move were at the time. Click Add trade.
+- **When you SELL** — open the Journal, pick "Close existing trade (sell)", select the open trade, enter sell date and price. The journal computes net AUD after fees and CGT, days held, and (if you recorded TRADEON's prediction) how far off the prediction was.
+
+The summary panel at the top of the Journal shows your **personal hit rate**, your **average days held**, your **TRADEON prediction error**, and most usefully — your **hit rate on trades you took AGAINST a WAIT signal**. That last metric is the truest test of "should I trust my gut over the system?"
+
+**Backup the journal regularly.** On Streamlit Cloud the data file can vanish on a redeploy or after the app sleeps. Use the Download button at the bottom of the Journal page to save a CSV copy to your laptop or tablet, then Upload to restore.
 
 ---
 

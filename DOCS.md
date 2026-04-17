@@ -253,14 +253,17 @@ Most behaviour is parameterised. Common things to tweak:
 
 | Page | What it shows |
 |------|---------------|
-| **Landing (`app.py`)** | Welcome, engine status, sidebar settings (broker + capital) |
+| **Landing (`app.py`)** | **Today's Playbook** (best GO + watchlist mood + one to watch), engine status, sidebar settings |
 | **Dashboard** | Watchlist table with trust grade, regime, signal — your daily glance |
 | **Deep Dive** | One stock: 20-year chart, key stats, hold-window heatmap, seasonality, hypothetical $1000 trade calculator, full backtest summary |
 | **Backtest Lab** | Pick stock + model + horizon, see prediction vs actual line chart and metrics |
-| **Forward Outlook** | Active GO signals only (often empty), with full trade plan including entry, exit, stop-loss, expected AUD return, broker walkthrough |
+| **Forward Outlook** | Active GO signals only (often empty), with full trade plan including entry, exit, stop-loss, expected AUD return, **broker deep-link button**, **clipboard order ticket**, broker walkthrough |
 | **Watchlist** | Current watchlist, in-watchlist recommender (which stocks have the strongest patterns), cache management |
 | **Learn** | Beginner education on broker accounts, order types, T+2 settlement, AU CGT, dividends, common mistakes, full glossary |
-| **Help** | This guide rendered in-app for quick reference |
+| **Help** | The user guide rendered in-app for quick reference |
+| **Journal** | Log real trades + self-grade your hit rate vs TRADEON's predictions |
+
+The pipeline that powers the Dashboard, Forward Outlook, and Today's Playbook is centralised in `app_pipeline.py:analyse_one()`. All three pages share a single `@st.cache_data` so the heavy backtest work is paid once per session and reused everywhere.
 
 ---
 
