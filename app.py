@@ -66,12 +66,18 @@ with col3:
 st.markdown("---")
 
 with st.expander("Engine status"):
-    st.write(f"**Prophet available:** {' Yes' if PROPHET_AVAILABLE else ' No (fallback to Holt-Winters + ARIMA)'}")
+    import sys
+    st.write(f"**Python:** {sys.version.split()[0]}")
+    st.write(f"**Prophet available:** {'Yes' if PROPHET_AVAILABLE else 'No (fallback to Holt-Winters + ARIMA)'}")
     st.write(f"**Watchlist size:** {len(WATCHLIST)} stocks")
-    st.caption(
-        "If Prophet isn't available, the ensemble drops to Holt-Winters + ARIMA. "
-        "Forecasts still work, just with slightly less accuracy on big-tech names. "
-        "Install with `pip install prophet` if your Python version supports it."
-    )
+    if not PROPHET_AVAILABLE:
+        st.caption(
+            "Prophet isn't installed in this environment, so the ensemble runs on "
+            "Holt-Winters + ARIMA. Forecasts still work; accuracy on big-tech names "
+            "is slightly lower than with Prophet enabled. To add Prophet locally, "
+            "use Python 3.11/3.12 and run `pip install prophet`. On Streamlit "
+            "Community Cloud, Prophet installs automatically (Python 3.11 is pinned "
+            "via runtime.txt)."
+        )
 
 render_disclaimer()

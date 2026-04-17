@@ -60,14 +60,16 @@ The `core/` package has zero UI dependencies, so it can be lifted into a FastAPI
 - Short holds (under 12 months) lose the AU 50% CGT discount. The app shows you both pre- and post-tax outcomes so you can decide if the trade still beats a 12-month hold after tax.
 - Expect mostly grey "WAIT" status on the dashboard. Possibly only 1-3 active GO signals at a time across the watchlist.
 
-## Backup workflow
+## Backup + tablet access
 
-The full project (excluding the regenerable `data_cache/`) is git-tracked. Push to a private GitHub repo as your real backup:
+The full project (excluding the regenerable `data_cache/`) is git-tracked. Push to a private GitHub repo for both backup and tablet access:
 
 ```powershell
-git remote add origin git@github.com:YOUR_USERNAME/TRADEON.git
+git remote add origin https://github.com/YOUR_USERNAME/tradeon.git
 git push -u origin main
 ```
+
+To then run TRADEON from your tablet, phone or any other browser (no laptop required), follow the step-by-step in **[DEPLOY.md](./DEPLOY.md)** - it deploys the app for free to Streamlit Community Cloud, auto-redeploys on every push, and supports Google-login access control.
 
 Optionally also point a Google Drive folder at the project root for a second copy.
 

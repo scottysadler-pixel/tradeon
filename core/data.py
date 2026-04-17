@@ -11,6 +11,8 @@ price/volume data.
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -19,8 +21,36 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = Path(__file__).resolve().parent.parent / "data_cache"
-CACHE_DIR.mkdir(exist_ok=True)
+
+def _resolve_cache_dir() -> Path:
+    """Pick a writable cache directory.
+
+    Preference order:
+      1. $TRADEON_CACHE_DIR if set (lets cloud platforms override)
+      2. <repo_root>/data_cache (the normal local case)
+      3. <tempdir>/tradeon_cache (fallback for read-only deploys)
+    """
+    override = os.environ.get("TRADEON_CACHE_DIR")
+    candidates = [
+        Path(override) if override else None,
+        Path(__file__).resolve().parent.parent / "data_cache",
+        Path(tempfile.gettempdir()) / "tradeon_cache",
+    ]
+    for cand in candidates:
+        if cand is None:
+            continue
+        try:
+            cand.mkdir(parents=True, exist_ok=True)
+            probe = cand / ".write_probe"
+            probe.write_text("ok")
+            probe.unlink(missing_ok=True)
+            return cand
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Cache dir %s not writable: %s", cand, e)
+    return Path(tempfile.gettempdir())
+
+
+CACHE_DIR = _resolve_cache_dir()
 
 # Pull this many years of history by default.
 DEFAULT_LOOKBACK_YEARS = 20

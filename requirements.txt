@@ -1,6 +1,13 @@
 # TRADEON - dependencies
-# Tested with Python 3.11+. Prophet may not have wheels on Python 3.14;
-# the app gracefully falls back to Holt-Winters + ARIMA if Prophet is unavailable.
+#
+# Streamlit Community Cloud uses Python 3.11 (pinned via runtime.txt) so all
+# packages below - including Prophet - install cleanly there.
+#
+# For LOCAL development on Python 3.14, Prophet may not yet have wheels.
+# In that case `pip install -r requirements.txt` will fail at the prophet line.
+# Workaround: comment out the `prophet` line below for local dev only - the
+# app's forecast engine auto-falls back to Holt-Winters + ARIMA when Prophet
+# is missing, so everything still works.
 
 # Core data + UI
 streamlit>=1.36
@@ -18,9 +25,7 @@ pyarrow>=15.0
 statsmodels>=0.14          # Holt-Winters, ARIMA, STL
 scikit-learn>=1.4          # metrics + scaling
 hmmlearn>=0.3              # regime detection
-
-# Optional: Prophet (best forecasts on big-tech names; install if your Python supports it)
-# prophet>=1.1.5
+prophet>=1.1.5             # best on big-tech names; Python 3.11/3.12 only
 
 # Dev
 pytest>=8.0
