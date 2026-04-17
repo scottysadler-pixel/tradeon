@@ -1,0 +1,26 @@
+# TRADEON - dependencies
+# Tested with Python 3.11+. Prophet may not have wheels on Python 3.14;
+# the app gracefully falls back to Holt-Winters + ARIMA if Prophet is unavailable.
+
+# Core data + UI
+streamlit>=1.36
+pandas>=2.2
+numpy>=1.26
+plotly>=5.22
+
+# Market data (raw OHLCV only - no external predictions)
+yfinance>=0.2.55
+
+# Storage
+pyarrow>=15.0
+
+# Forecasting
+statsmodels>=0.14          # Holt-Winters, ARIMA, STL
+scikit-learn>=1.4          # metrics + scaling
+hmmlearn>=0.3              # regime detection
+
+# Optional: Prophet (best forecasts on big-tech names; install if your Python supports it)
+# prophet>=1.1.5
+
+# Dev
+pytest>=8.0
