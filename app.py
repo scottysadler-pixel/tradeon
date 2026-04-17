@@ -24,7 +24,9 @@ with st.sidebar:
     capital = capital_input()
     st.caption(f"Watchlist: **{len(WATCHLIST)}** stocks")
     st.session_state["broker"] = broker
-    st.session_state["capital"] = capital
+    # Note: capital_input() uses widget key "capital", which auto-populates
+    # st.session_state["capital"]. Re-assigning it here would raise
+    # StreamlitAPIException ("widget already created with this key").
 
 st.markdown("### Welcome")
 st.markdown(
