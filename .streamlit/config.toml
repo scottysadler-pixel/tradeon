@@ -7,7 +7,11 @@ textColor = "#e6edf3"
 font = "sans serif"
 
 [server]
-headless = false
+# headless=true is required on Streamlit Community Cloud (no display, no stdin).
+# Locally it just means Streamlit won't auto-open your browser - it prints the
+# URL (http://localhost:8501) and you click it. Override locally with:
+#   streamlit run app.py --server.headless=false
+headless = true
 runOnSave = true
 
 [browser]
