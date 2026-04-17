@@ -1,6 +1,6 @@
 {
-  "built_at_utc": "2026-04-17T08:39:34+00:00",
-  "elapsed_s": 21.5,
+  "built_at_utc": "2026-04-17T20:47:18+00:00",
+  "elapsed_s": 20.5,
   "ok_count": 25,
   "fail_count": 0,
   "entries": [
@@ -11,7 +11,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 1.02
+      "elapsed_s": 0.91
     },
     {
       "symbol": "RIO.AX",
@@ -20,7 +20,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.34
+      "elapsed_s": 0.55
     },
     {
       "symbol": "FMG.AX",
@@ -29,7 +29,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.69
+      "elapsed_s": 0.32
     },
     {
       "symbol": "BSL.AX",
@@ -38,7 +38,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.32
+      "elapsed_s": 0.49
     },
     {
       "symbol": "S32.AX",
@@ -47,7 +47,7 @@
       "first_date": "2015-05-18",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.25
+      "elapsed_s": 0.23
     },
     {
       "symbol": "CBA.AX",
@@ -56,7 +56,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.45
+      "elapsed_s": 0.49
     },
     {
       "symbol": "WBC.AX",
@@ -65,7 +65,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.43
+      "elapsed_s": 0.4
     },
     {
       "symbol": "NAB.AX",
@@ -74,7 +74,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.43
+      "elapsed_s": 0.45
     },
     {
       "symbol": "ANZ.AX",
@@ -83,7 +83,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.55
+      "elapsed_s": 0.57
     },
     {
       "symbol": "MQG.AX",
@@ -92,7 +92,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.59
+      "elapsed_s": 0.61
     },
     {
       "symbol": "WES.AX",
@@ -101,7 +101,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.56
+      "elapsed_s": 0.39
     },
     {
       "symbol": "WOW.AX",
@@ -110,7 +110,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.43
+      "elapsed_s": 0.35
     },
     {
       "symbol": "COL.AX",
@@ -119,7 +119,7 @@
       "first_date": "2018-11-21",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.36
+      "elapsed_s": 0.21
     },
     {
       "symbol": "TLS.AX",
@@ -128,7 +128,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.52
+      "elapsed_s": 0.44
     },
     {
       "symbol": "CSL.AX",
@@ -137,7 +137,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.54
+      "elapsed_s": 0.37
     },
     {
       "symbol": "MSFT",
@@ -146,7 +146,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.5
+      "elapsed_s": 0.33
     },
     {
       "symbol": "AAPL",
@@ -155,7 +155,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.53
+      "elapsed_s": 0.51
     },
     {
       "symbol": "AMZN",
@@ -164,7 +164,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.31
+      "elapsed_s": 0.38
     },
     {
       "symbol": "GOOGL",
@@ -173,7 +173,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.48
+      "elapsed_s": 0.47
     },
     {
       "symbol": "NVDA",
@@ -182,7 +182,7 @@
       "first_date": "2006-04-03",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.49
+      "elapsed_s": 0.62
     },
     {
       "symbol": "META",
@@ -191,16 +191,16 @@
       "first_date": "2012-05-18",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.28
+      "elapsed_s": 0.27
     },
     {
       "symbol": "AUDUSD=X",
       "ok": true,
-      "rows": 5181,
+      "rows": 5182,
       "first_date": "2006-05-16",
-      "last_date": "2026-04-16",
+      "last_date": "2026-04-17",
       "adjusted": false,
-      "elapsed_s": 0.55
+      "elapsed_s": 0.45
     },
     {
       "symbol": "^GSPC",
@@ -209,7 +209,7 @@
       "first_date": "2016-04-11",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.19
+      "elapsed_s": 0.22
     },
     {
       "symbol": "^AXJO",
@@ -218,7 +218,7 @@
       "first_date": "2016-04-11",
       "last_date": "2026-04-16",
       "adjusted": true,
-      "elapsed_s": 0.35
+      "elapsed_s": 0.18
     },
     {
       "symbol": "^VIX",
@@ -227,7 +227,7 @@
       "first_date": "2025-04-16",
       "last_date": "2026-04-16",
       "adjusted": false,
-      "elapsed_s": 0.32
+      "elapsed_s": 0.21
     }
   ]
 }
