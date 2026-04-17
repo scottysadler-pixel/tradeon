@@ -173,12 +173,18 @@ def is_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) ->
     same session, resets on restart.
     """
     e = enh or all_off()
-    return st.session_state.get(f"_pipeline_warm__{broker}__{e.short_label()}", False)
+    # Note: Streamlit forbids session_state keys that start with underscore,
+    # so the key uses a leading word.
+    return st.session_state.get(f"pipeline_warm__{broker}__{e.short_label()}", False)
 
 
 def mark_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) -> None:
     e = enh or all_off()
-    st.session_state[f"_pipeline_warm__{broker}__{e.short_label()}"] = True
+    try:
+        st.session_state[f"pipeline_warm__{broker}__{e.short_label()}"] = True
+    except Exception:
+        # Warmth flag is a non-essential cache marker - never let it crash a page.
+        pass
 
 
 def analyse_all(

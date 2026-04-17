@@ -86,7 +86,7 @@ def with_only(name: str) -> Enhancements:
 
 # ----- Streamlit session_state helpers (UI layer wraps these) ----------
 
-SESSION_KEY = "_tradeon_enhancements"
+SESSION_KEY = "tradeon_enhancements"
 
 
 def from_session(session_state) -> Enhancements:
