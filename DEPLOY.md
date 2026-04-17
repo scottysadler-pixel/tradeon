@@ -112,7 +112,7 @@ About 30-60 seconds after the push, Streamlit Cloud rebuilds and reloads the liv
 | **RAM** | 1 GB per app. TRADEON uses well under this. |
 | **CPU** | Shared. First load after a sleep is slow (10-30 sec) because the watchlist analysis is heavy. |
 | **Sleep** | After ~7 days of zero traffic, the app sleeps. Visiting wakes it (~30 sec cold start). |
-| **Storage** | Ephemeral - the `data_cache/` parquet files vanish on every redeploy or wake. yfinance refetches on demand. This is fine. |
+| **Storage** | Ephemeral - any cache written *at runtime* vanishes on redeploy. We work around this by bundling pre-built parquet files into the repo (see [Pre-bundled price cache](#pre-bundled-price-cache) below). |
 | **Bandwidth** | Plenty for personal use. |
 | **Public** | The URL is public unless you enable the Google-login gate (Step 5). |
 
@@ -138,11 +138,67 @@ Something missed `requirements.txt`. Add the missing package locally, push, rede
 
 ### App is slow on first load
 
-Expected - the Dashboard page runs walk-forward backtests on the entire watchlist. After the first load the results are cached in memory for an hour, so subsequent visits are fast. If you want to speed up cold starts, you can shrink the watchlist in `core/tickers.py`.
+Expected on a *truly cold* deploy - the Dashboard page runs walk-forward backtests on the entire watchlist. After the first load the results are cached in memory for an hour, so subsequent visits are fast.
+
+**The single biggest speed-up** is to make sure the bundled price cache is up to date. See [Pre-bundled price cache](#pre-bundled-price-cache) below: with it enabled, cold starts drop from 10-25 minutes to roughly 30-90 seconds because Streamlit Cloud no longer needs to refetch 20 years of OHLCV from yfinance for every symbol.
+
+If even that isn't fast enough you can shrink the watchlist in `core/tickers.py`.
 
 ### "TooManyRequestsError" from yfinance
 
 Yahoo throttles aggressive callers. The 1-hour cache in the Dashboard plus the on-disk parquet cache should keep you well under the limit. If it happens, click **Settings -> Reboot app** in Streamlit Cloud and wait 5 minutes.
+
+---
+
+## Pre-bundled price cache
+
+> Added in v1.3 to fix the painfully slow Streamlit Cloud cold start.
+
+### The problem this solves
+
+Streamlit Cloud's free tier gives you ephemeral storage. Every time the container restarts (after a code push, after a few days idle, or if Streamlit reshuffles infrastructure) the `data_cache/` folder is wiped. The very next visit to the Dashboard then refetches **20 years of daily OHLCV for 21 stocks plus FX and three index symbols**, one symbol at a time, with `yfinance` rate limiting in the way. That's why a fresh cold start used to take 10-25 minutes.
+
+### The fix
+
+We commit the parquet cache files into the repo itself. Because Streamlit Cloud clones the repo on every deploy, the cache lands on disk *before* the app even starts. The Dashboard then reads them from local disk in milliseconds.
+
+To stop the bundled cache going stale, a GitHub Action (`.github/workflows/refresh-cache.yml`) re-fetches every symbol on weekday mornings (06:30 AEST), commits the refreshed parquet files, and pushes them back to `main`. Streamlit Cloud auto-redeploys on push, so by the time you open the app each morning the cache is already current.
+
+### What's in the bundle
+
+After a refresh, `data_cache/` contains:
+
+- One `*_adj.parquet` per watchlist symbol (21 files, ~250 KB each)
+- `AUDUSD=X_raw.parquet` for currency conversion
+- `^GSPC_adj.parquet`, `^AXJO_adj.parquet` for the macro-confirmation toggle
+- `^VIX_raw.parquet` for the macro mood indicator
+- `MANIFEST.json` listing build timestamp + per-symbol metadata
+
+Total size: roughly **5 MB**. Negligible by repo standards.
+
+### How to refresh manually
+
+```powershell
+python scripts\refresh_cache.py
+git add data_cache/
+git commit -m "chore(cache): manual refresh"
+git push
+```
+
+Streamlit Cloud will redeploy within a minute.
+
+### Verifying the GitHub Action is working
+
+1. Go to your repo on GitHub -> **Actions** tab.
+2. You should see a workflow called **Refresh price cache** with green run circles next to its weekday-morning runs.
+3. Click any run to see the per-symbol fetch log. Failures on individual symbols are expected occasionally (Yahoo flakes); failures on *every* symbol are not.
+4. To force a refresh on demand, open the workflow and click **Run workflow**.
+
+### What if the action fails for several days
+
+The fallback is automatic: `core/data.py`'s `CACHE_TTL_HOURS` defaults to 36, so after roughly a day and a half of stale bundled data the live app starts refetching from yfinance on demand again. You'll see the slow cold-start behaviour return until the action recovers.
+
+You can also widen or tighten the freshness window by setting the `TRADEON_CACHE_TTL_HOURS` environment variable in Streamlit Cloud's **Settings -> Secrets** (e.g. `TRADEON_CACHE_TTL_HOURS = "72"` to extend it to three days).
 
 ---
 

@@ -281,6 +281,19 @@ Each enhancement toggle creates its own cache slot — `analyse_one()` is keyed 
 
 `core/backtest._walk_forward_folds()` now defaults to `max_folds=60` and `prefer_recent=True`. Previously it was capped at 20 folds and kept the *oldest* folds, which meant a 20-year-old MSFT history showed predictions ending in ~2015. The pipeline used by the watchlist still passes `max_folds=20` to keep per-ticker run time manageable, but with `prefer_recent=True` those 20 folds are now the most recent ~5 years instead of the oldest 5. The Backtest Lab exposes the cap in its UI ("Last 5 years / Last 10 years / All available").
 
+### Bundled price cache + nightly refresh action (v1.3)
+
+To eliminate Streamlit Cloud's painful cold-start time (10-25 minutes refetching 25 symbols of 20-year OHLCV from yfinance), the parquet cache is now committed into the repo:
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| Refresh script | `scripts/refresh_cache.py` | Re-fetches all watchlist symbols + FX + macro indices, writes to `data_cache/`, drops a `MANIFEST.json` |
+| GitHub Action | `.github/workflows/refresh-cache.yml` | Runs the refresh script weekday mornings (06:30 AEST), commits + pushes the updated parquets |
+| `.gitignore` carve-outs | `.gitignore` | Allows `data_cache/*.parquet` and `data_cache/MANIFEST.json` while still ignoring scratch files |
+| TTL bump | `core/data.py:CACHE_TTL_HOURS` | Default raised from 12h to 36h (override with `$TRADEON_CACHE_TTL_HOURS`) so a missed nightly run doesn't immediately re-trigger live refetches |
+
+The cache totals ~5 MB. Streamlit Cloud clones it on every deploy, so the Dashboard skips the slow `yfinance.history()` step entirely on a normal cold start. If the bundled cache is missing or stale beyond TTL the app silently falls back to live yfinance fetches — same code path as before, just slower.
+
 ---
 
 ## 12. Honest limitations
@@ -288,6 +301,6 @@ Each enhancement toggle creates its own cache slot — `analyse_one()` is keyed 
 - **No exogenous shocks.** Statistical models cannot predict COVID, GFC, earnings surprises, regulatory change, geopolitical events. The trust grade will visibly drop after such events — this is the system working correctly.
 - **Past performance does not guarantee future results.** Patterns from 2005-2025 may stop working in 2026.
 - **Short-hold tax penalty.** Holdings under 12 months do not qualify for the 50% CGT discount. The app shows both pre-tax and post-tax outcomes so you can see if a 90-day trade still beats just holding for a year.
-- **Free-tier latency.** On Streamlit Community Cloud's free tier, the cold-load Dashboard takes 10-25 minutes for the full watchlist. Subsequent loads are cached for an hour.
+- **Free-tier latency.** On Streamlit Community Cloud's free tier, a normal cold-load Dashboard takes 30-90 seconds (bundled cache hit). When the bundled cache is missing or stale beyond TTL, it falls back to live yfinance fetches and can take 10-25 minutes. Subsequent loads within the hour are cached in memory and instant.
 - **No real-time data.** yfinance gives end-of-day data with a 15-minute delay during market hours. TRADEON is built for swing trading, not day trading.
 - **Decision support, not financial advice.** TRADEON is a tool for your own analysis. You bear all responsibility for trades you choose to place.

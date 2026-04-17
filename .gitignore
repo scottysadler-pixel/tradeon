@@ -11,9 +11,21 @@ venv/
 .venv/
 env/
 
-# Local data cache (regenerated on demand from yfinance)
-data_cache/
-*.parquet
+# Local data cache.
+# We DO want to commit the bundled cache so Streamlit Cloud cold-starts
+# instantly instead of refetching 20 years of history for every symbol.
+# The nightly GitHub Action (.github/workflows/refresh-cache.yml) keeps
+# data_cache/*.parquet up to date.
+# Anything else under data_cache/ (logs, scratch files, manual exports)
+# stays ignored.
+data_cache/*
+!data_cache/.gitkeep
+!data_cache/*.parquet
+!data_cache/MANIFEST.json
+
+# Stray parquet files anywhere else in the tree are still ignored.
+/*.parquet
+**/scratch_*.parquet
 
 # Streamlit
 .streamlit/secrets.toml

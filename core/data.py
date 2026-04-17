@@ -56,7 +56,13 @@ CACHE_DIR = _resolve_cache_dir()
 DEFAULT_LOOKBACK_YEARS = 20
 
 # Cache TTL - if cached file is younger than this, use it.
-CACHE_TTL_HOURS = 12
+# Default 36h is chosen so files written by the nightly cache-refresh
+# GitHub Action stay fresh for the entire trading day even if the action
+# runs slightly late or fails once. Override with $TRADEON_CACHE_TTL_HOURS.
+try:
+    CACHE_TTL_HOURS = int(os.environ.get("TRADEON_CACHE_TTL_HOURS", "36"))
+except ValueError:
+    CACHE_TTL_HOURS = 36
 
 
 def _cache_path(symbol: str, adjusted: bool) -> Path:

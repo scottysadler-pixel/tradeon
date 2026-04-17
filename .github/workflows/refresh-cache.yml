@@ -1,0 +1,75 @@
+name: Refresh price cache
+
+# Re-fetch every watchlist symbol's last 20 years of OHLCV from yfinance
+# every weekday morning AEST and commit the resulting parquet files back
+# into the repo. Streamlit Cloud auto-redeploys on push, so the live app
+# wakes up the next day with a pre-warmed cache and cold-start time
+# drops from ~10-25 minutes to a few seconds.
+#
+# Schedule:
+#   20:30 UTC = 06:30 AEST (UTC+10) / 07:30 AEDT (UTC+11)
+#   Mon-Fri only - markets don't move on weekends and we don't want to
+#   spend GitHub Actions minutes refreshing identical data.
+#
+# You can also trigger it by hand from the Actions tab.
+
+on:
+  schedule:
+    - cron: "30 20 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # needed to push the refreshed parquet files back
+
+# Cancel an older run if a new one starts (avoids overlap if Yahoo is slow).
+concurrency:
+  group: refresh-cache
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          # Persist the default GITHUB_TOKEN so the later push step works.
+          persist-credentials: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        # The cache refresh only needs yfinance + pandas + pyarrow;
+        # install the trimmed minimum so the action stays fast.
+        run: |
+          python -m pip install --upgrade pip
+          pip install "yfinance>=0.2.40" "pandas>=2.0" "pyarrow>=14"
+
+      - name: Refresh cache
+        env:
+          # 0 disables the freshness check inside fetch_history - the
+          # script already passes force_refresh=True, this is belt+braces.
+          TRADEON_CACHE_TTL_HOURS: "0"
+        run: python scripts/refresh_cache.py
+
+      - name: Commit and push refreshed cache
+        run: |
+          set -e
+          git config user.name  "tradeon-cache-bot"
+          git config user.email "tradeon-cache-bot@users.noreply.github.com"
+
+          git add -A data_cache/
+          if git diff --cached --quiet; then
+            echo "No cache changes to commit."
+            exit 0
+          fi
+
+          STAMP="$(date -u +'%Y-%m-%d %H:%M UTC')"
+          git commit -m "chore(cache): nightly refresh ${STAMP}"
+          git push
