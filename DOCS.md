@@ -35,7 +35,7 @@ TRADEON/
 ├── core/                      ← All business logic — zero Streamlit imports
 │   ├── tickers.py             ← The 21-stock watchlist
 │   ├── glossary.py            ← Definitions for tooltips & education
-│   ├── data.py                ← yfinance fetch + Parquet cache
+│   ├── data.py                ← yfinance fetch + Parquet cache (TTL 36h)
 │   ├── fx.py                  ← AUD/USD conversion
 │   ├── costs.py               ← AU broker fees + CGT logic
 │   ├── analysis.py            ← Stats, seasonality, EOFY pattern
@@ -47,10 +47,22 @@ TRADEON/
 │   ├── position_size.py       ← Volatility-adjusted sizing
 │   ├── correlations.py        ← Watchlist co-movement & divergences
 │   ├── forecast.py            ← Naive, seasonal, Holt-Winters, ARIMA, Prophet, ensemble
+│   ├── forecast_weighted.py   ← Recency-weighted ensemble (Tier-3 toggle 4)
 │   ├── backtest.py            ← Walk-forward backtest + trust-grade calculator
 │   ├── signals.py             ← The GO / WAIT / AVOID decider
+│   ├── settings.py            ← `Enhancements` dataclass + session-state plumbing
+│   ├── volatility.py          ← GARCH(1,1) vol forecast (Tier-2 toggle 1)
+│   ├── macro.py               ← Cross-asset macro snapshot (Tier-2 toggle 2)
+│   ├── regime_grade.py        ← Regime-stratified trust grade (Tier-2 toggle 3)
+│   ├── circuit_breaker.py     ← Drawdown circuit-breaker (Tier-3 toggle 5)
 │   ├── recommendations.py     ← In-watchlist suggester
 │   └── trade_walkthrough.py   ← Broker-specific "how to actually place this trade"
+├── app_pipeline.py            ← Centralised analyse_one() — applies toggles, caches per-stock pipeline
+├── scripts/
+│   ├── refresh_cache.py       ← Re-fetch all watchlist OHLCV → data_cache/*.parquet
+│   └── compare_enhancements.py ← Diagnostic: side-by-side accuracy across all 8 toggle combos
+├── .github/workflows/
+│   └── refresh-cache.yml      ← Weekday-morning GitHub Action that runs refresh_cache.py
 ├── tests/                     ← Synthetic + live pytest suites
 ├── data_cache/                ← Local Parquet cache (gitignored)
 ├── .streamlit/config.toml     ← Theme + cloud-friendly server config
@@ -64,34 +76,86 @@ The `core/` package has **zero UI dependencies**. It can be lifted into a FastAP
 
 ## 3. Data flow (top to bottom)
 
+The full pipeline lives in `app_pipeline.py:analyse_one()`. It is `@st.cache_data`-cached on `(symbol, broker, enh_garch, enh_macro, enh_regime_grade, enh_recency_weighted, enh_drawdown_breaker)`, so each toggle combination has its own cache slot and pages share results within a session.
+
 ```text
-yfinance (raw OHLCV)
+yfinance (raw OHLCV, 20 years)
     ↓
-core/data.py — fetch + Parquet cache (data_cache/<symbol>_adj.parquet)
+core/data.py — fetch + Parquet cache (data_cache/<symbol>_adj.parquet, TTL 36h)
     ↓
 core/fx.py — convert USD prices to AUD using AUDUSD=X history
     ↓
 ┌─────────────────────────────────────────────────────────────┐
-│  Per-stock pipeline (cached for 1 hour)                     │
+│  STAGE 1: PER-STOCK ANALYTICS                               │
 │                                                             │
-│  core/analysis.py  →  CAGR, vol, drawdown, seasonality      │
-│  core/regime.py    →  current bull/bear/sideways            │
-│  core/technicals.py →  RSI, MACD, Bollinger snapshot        │
-│  core/hold_window.py →  best historical buy/sell months     │
+│  core/analysis.py     →  CAGR, vol, drawdown, seasonality   │
+│  core/regime.py       →  current bull/bear/sideways (HMM)   │
+│  core/technicals.py   →  RSI, MACD, Bollinger snapshot      │
+│  core/hold_window.py  →  best historical buy/sell months    │
 │  core/earnings_proxy.py → upcoming volatility windows       │
-│  core/stops.py     →  recommended stop-loss level           │
-│  core/correlations.py → divergence flags vs watchlist       │
-│  core/forecast.py  →  ensemble forward-looking forecast     │
-│  core/backtest.py  →  walk-forward back-check + trust grade │
-│  core/position_size.py → vol-adjusted AUD position size     │
-│  core/costs.py     →  apply broker fees + CGT to all maths  │
-│  core/signals.py   →  combine everything → GO/WAIT/AVOID    │
+│  core/stops.py        →  recommended stop-loss level        │
+│  core/correlations.py →  divergence flags vs watchlist      │
+└─────────────────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 2: BACKTEST + TRUST GRADE                            │
+│                                                             │
+│  core/backtest.py     →  walk-forward each model            │
+│                          (naive, seasonal, HW, ARIMA, ens.) │
+│                          • trust_grade()        if NOT use_regime_grade
+│                          • stratified_grade()   if use_regime_grade
+└─────────────────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 3: FORECAST                                          │
+│                                                             │
+│  core/forecast.py:ensemble_forecast()           if NOT use_recency_weighted
+│      OR                                                     │
+│  core/forecast_weighted.py:recency_weighted_forecast()      │
+│      reads bt sample_predictions, recomputes weights,       │
+│      calls ensemble_forecast(weights=…)         if use_recency_weighted
+└─────────────────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 4: SIZING (optional GARCH adjustment)                │
+│                                                             │
+│  core/position_size.py:suggest()                            │
+│      base size from trailing 90d stdev                      │
+│  core/volatility.py:forecast_vol() + garch_*_multiplier()   │
+│      shrinks/grows the base size                if use_garch
+└─────────────────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 5: DECIDER (the AND-gate)                            │
+│                                                             │
+│  core/signals.py:decide() — see Section 5 for the rules     │
+│      → returns TradeSignal(state=GO|WAIT|AVOID, ...)        │
+└─────────────────────────────────────────────────────────────┘
+    ↓
+┌─────────────────────────────────────────────────────────────┐
+│  STAGE 6: POST-DECISION SAFETY FILTERS (opt-in)             │
+│                                                             │
+│  if use_macro_confirm and macro_blocks_go(macro_snapshot):  │
+│      sig.state = "WAIT"  (preserves reasons, halves conf.)  │
+│                                                             │
+│  if use_drawdown_breaker and check_drawdown(df).triggered:  │
+│      sig.state = "WAIT"  (preserves reasons, halves conf.)  │
+│                                                             │
+│  Both filters layer independently — either can suppress a   │
+│  GO. Neither can create a new GO. Order is macro → breaker. │
 └─────────────────────────────────────────────────────────────┘
     ↓
 core/trade_walkthrough.py → broker-specific instructions
     ↓
-Streamlit UI (pages/) → human-readable output
+Streamlit UI (pages/) → human-readable output, including
+  diagnostic captions for every active toggle on the GO card
 ```
+
+**Key invariants:**
+1. The trust grade is always computed by the same walk-forward backtest, regardless of which toggles are on. Regime-grade just *re-slices* the same fold data.
+2. The decider sees the forecast (possibly recency-weighted) and the trust grade (possibly regime-stratified) but does NOT see the safety filters. Macro and breaker layer on top.
+3. Safety filters only ever downgrade GO → WAIT. They cannot promote WAIT → GO.
+4. Every stage that produces a number reports it AUD-net-of-fees-and-tax. There is no "raw" number sneaking through.
 
 ---
 
@@ -154,6 +218,19 @@ If any condition fails, the result is `WAIT`. If the regime is `bear` AND the tr
 
 This conservative AND-gate is intentional. Most days, most stocks return `WAIT`. That is the system working correctly.
 
+### Post-decision safety filters
+
+After `decide()` returns, `app_pipeline.analyse_one` may further suppress a GO based on opt-in safety filters. These never create new GOs — they only ever downgrade GO → WAIT.
+
+| Filter | Toggle | Trigger condition | Effect on signal |
+|--------|--------|-------------------|------------------|
+| **Macro confirmation** | `use_macro_confirm` | `macro_snapshot(market).mood == "hostile"` (parent index in bear OR VIX > 30) | `sig.state = "WAIT"`, headline rewritten as `WAIT (macro override) - hostile cross-asset conditions`, confidence × 0.5, original reasons preserved with the macro interpretation prepended |
+| **Drawdown breaker** | `use_drawdown_breaker` | `check_drawdown(df).triggered` (latest close < peak − 15% within last 30 trading days) | `sig.state = "WAIT"`, headline rewritten as `WAIT (drawdown breaker) - X.X% off 30-day peak`, confidence × 0.5, breaker interpretation prepended to reasons |
+
+Both filters are evaluated in series (macro first, then breaker). Either can suppress a GO independently; both can suppress simultaneously. The filters are pure functions on the price df + market metadata, so they are unit-tested in isolation in `tests/test_tier2.py` and `tests/test_tier3.py`.
+
+The downgraded `TradeSignal` flows through unchanged to the UI, so when a GO is suppressed by either filter, the Forward Outlook page won't show a card for it (the page only displays `state == "GO"`), and the Dashboard will show `WAIT` with the override reason in the signal headline tooltip.
+
 ---
 
 ## 6. Models in the forecast ensemble
@@ -200,8 +277,8 @@ Two layers:
 
 | Layer | Location | TTL | Purpose |
 |-------|----------|-----|---------|
-| **Raw OHLCV** | `data_cache/*.parquet` | 12 hours | Avoid hammering yfinance |
-| **Pipeline output** | Streamlit memory (`@st.cache_data`) | 1 hour | Avoid re-running heavy backtests |
+| **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 36 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
+| **Pipeline output** | Streamlit memory (`@st.cache_data`) | 1 hour | Avoid re-running heavy backtests; one slot per `(symbol, broker, ...all 5 toggle bools)` |
 
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
 1. `$TRADEON_CACHE_DIR` env var if set
@@ -220,6 +297,8 @@ The disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which 
 |------|------|----------------|
 | `tests/test_smoke.py` | Synthetic data | Every core module + end-to-end signal decider on fake price series |
 | `tests/test_live.py` | Real yfinance data | MSFT and BHP.AX through the full pipeline |
+| `tests/test_tier2.py` | Synthetic data | Settings dataclass, GARCH volatility forecast, regime-stratified trust grade, backtest fold-coverage |
+| `tests/test_tier3.py` | Synthetic data | New toggles round-trip, recency-weight computation (cap/floor/fallback), drawdown breaker (idle/triggered/edge cases) |
 
 Run all tests:
 
@@ -239,12 +318,18 @@ Most behaviour is parameterised. Common things to tweak:
 |------|-------|
 | Watchlist composition | `core/tickers.py:WATCHLIST` |
 | Default lookback years | `core/data.py:DEFAULT_LOOKBACK_YEARS` |
-| Cache TTL | `core/data.py:CACHE_TTL_HOURS` |
+| Cache TTL (hours) | `core/data.py:CACHE_TTL_HOURS` (env override: `TRADEON_CACHE_TTL_HOURS`) |
 | Backtest horizon | `core/backtest.py` (default 90 days) |
+| Default max folds for live watchlist | `app_pipeline.py:analyse_one` (currently 20, prefer-recent) |
+| Default max folds for Backtest Lab | `core/backtest.py` (currently 60, prefer-recent) |
 | GO signal thresholds | `core/signals.py:decide` |
 | AU CGT rate | `core/costs.py:DEFAULT_MARGINAL_RATE` |
 | Broker fee profiles | `core/costs.py:BROKERS` |
-| Ensemble model weights | `core/backtest.py:model_weights_from_backtest` |
+| Ensemble model weights (vanilla) | `core/forecast.py:ensemble_forecast` |
+| Recency-weighting tunables | `core/forecast_weighted.py` (`DEFAULT_LOOKBACK_FOLDS`, `DEFAULT_MAX_WEIGHT`, `DEFAULT_MIN_WEIGHT`) |
+| Drawdown breaker tunables | `core/circuit_breaker.py` (`DEFAULT_WINDOW_DAYS=30`, `DEFAULT_THRESHOLD_PCT=15`) |
+| GARCH multiplier ranges | `core/volatility.py:garch_position_multiplier` and `garch_band_multiplier` |
+| Macro hostile thresholds | `core/macro.py` (VIX > 30 + parent index in bear) |
 | Theme colours | `.streamlit/config.toml` |
 
 ---
@@ -253,16 +338,16 @@ Most behaviour is parameterised. Common things to tweak:
 
 | Page | What it shows |
 |------|---------------|
-| **Landing (`app.py`)** | **Today's Playbook** (best GO + watchlist mood + one to watch), engine status, sidebar settings |
-| **Dashboard** | Watchlist table with trust grade, regime, signal — your daily glance |
+| **Landing (`app.py`)** | **Today's Playbook** (best GO + watchlist mood + one to watch), engine status, sidebar settings, active-enhancements badge |
+| **Dashboard** | Watchlist table with trust grade, regime, signal — your daily glance. Active-enhancements banner at top reflects the current Strategy Lab toggles. |
 | **Deep Dive** | One stock: 20-year chart, key stats, hold-window heatmap, seasonality, hypothetical $1000 trade calculator, full backtest summary |
-| **Backtest Lab** | Pick stock + model + horizon, see prediction vs actual line chart and metrics |
-| **Forward Outlook** | Active GO signals only (often empty), with full trade plan including entry, exit, stop-loss, expected AUD return, **broker deep-link button**, **clipboard order ticket**, broker walkthrough |
+| **Backtest Lab** | Pick stock + model + horizon + history range (`Last 5y / Last 10y / All available up to 60 folds`), see prediction vs actual line chart and metrics. The history-range selector is the v1.2 fix for the "predictions stop in 2018" issue. |
+| **Forward Outlook** | Active GO signals only (often empty), with full trade plan including entry, exit, stop-loss, expected AUD return, **broker deep-link button**, **clipboard order ticket**, broker walkthrough. Per-card diagnostic captions surface every active toggle's interpretation (GARCH vol, macro mood, recency weights, breaker status). |
 | **Watchlist** | Current watchlist, in-watchlist recommender (which stocks have the strongest patterns), cache management |
 | **Learn** | Beginner education on broker accounts, order types, T+2 settlement, AU CGT, dividends, common mistakes, full glossary |
 | **Help** | The user guide rendered in-app for quick reference |
 | **Journal** | Log real trades + self-grade your hit rate vs TRADEON's predictions |
-| **Strategy Lab** | Toggle the three Tier-2 enhancements (GARCH / cross-asset / regime-stratified grade), run ON-vs-OFF backtest comparisons, apply globally |
+| **Strategy Lab** | Toggle all five enhancements (GARCH / cross-asset / regime-stratified grade / recency-weighted ensemble / drawdown circuit-breaker), run ON-vs-OFF backtest comparisons per stock, apply globally to the rest of the app. Includes a per-toggle "what it does under the hood" expander. |
 
 The pipeline that powers the Dashboard, Forward Outlook, and Today's Playbook is centralised in `app_pipeline.py:analyse_one()`. All three pages share a single `@st.cache_data` so the heavy backtest work is paid once per session and reused everywhere.
 

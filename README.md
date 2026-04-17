@@ -1,18 +1,34 @@
 # TRADEON
 
-A local Streamlit app that learns 20 years of price patterns for an Australian-tilted watchlist of prominent stocks, runs in-house forecasting models against itself to earn a per-stock trust grade, and only issues a "GO" signal when multi-model consensus, market regime, seasonal window and technical indicators all agree. All projections are computed locally from raw OHLCV - no external predictions are consumed.
+A local Streamlit app that learns 20 years of price patterns for an Australian-tilted watchlist of prominent stocks, runs in-house forecasting models against itself to earn a per-stock trust grade, and only issues a "GO" signal when multi-model consensus, market regime, seasonal window and technical indicators all agree. All projections are computed locally from raw OHLCV — no external predictions are consumed.
 
 This is **decision support, not financial advice.**
 
 ## What it does
 
-1. Pulls 20 years of raw daily price data per stock (yfinance).
+1. Pulls 20 years of raw daily price data per stock (yfinance, bundled in the repo and refreshed nightly by a GitHub Action).
 2. Runs an ensemble of forecasters (Prophet + Holt-Winters + ARIMA + naive baselines).
 3. Detects current market regime (bull / bear / sideways) and only trusts forecasts trained on similar periods.
 4. Finds each stock's best historical hold-window (e.g. "BHP gains avg 8.2% bought late Oct, sold late Feb, 73% hit rate").
-5. Walk-forward backtests itself - earns trust grade A-F vs naive baselines, **net of broker fees and AU CGT**.
+5. Walk-forward backtests itself — earns trust grade A-F vs naive baselines, **net of broker fees and AU CGT**.
 6. Issues GO signal only when ensemble + regime + seasonal window + technical confirmation all align.
 7. Reports everything in AUD with broker-specific "how to actually place this trade" walkthroughs.
+
+## Five opt-in enhancements (Strategy Lab)
+
+The default behaviour is the v1 baseline. Five additional toggles let you sharpen forecasts or add safety filters — each one earns its keep individually before you turn it on globally:
+
+| # | Toggle | What it does |
+|---|--------|--------------|
+| 1 | **GARCH volatility** | Forecasts volatility for the next 90 days; shrinks position size when a storm is expected, grows it when calm. |
+| 2 | **Cross-asset confirmation** | Blocks a single-stock GO if the parent index (S&P 500 / ASX 200) is in a bear regime or VIX > 30. |
+| 3 | **Regime-stratified trust grade** | Grades the model only on quarters whose start-regime matches today's, instead of all-history average. |
+| 4 | **Recency-weighted ensemble** *(v1.3)* | Re-weights prophet/holt-winters/arima by which has been most accurate over the last 5 quarterly forecasts. |
+| 5 | **Drawdown circuit-breaker** *(v1.3)* | Forces any GO to WAIT if the stock has fallen more than 15% from its peak in the last 30 trading days. |
+
+All toggles default to OFF. The Strategy Lab page lets you flip them on, run an honest ON-vs-OFF backtest comparison per stock, and apply the combo globally only when it consistently helps.
+
+See **[USER_GUIDE.md § 1.5](./USER_GUIDE.md#15-how-it-all-fits-together)** for a full mental model of how toggles plug into the pipeline.
 
 ## Quick start
 
@@ -49,9 +65,12 @@ The `core/` package has zero UI dependencies, so it can be lifted into a FastAPI
 ## How it actually works (plain English)
 
 - **Trust grade A-F**: every refresh, the app pretends to be back in time, predicts forward, then compares to what really happened. The grade tells you whether to take this stock's next prediction seriously.
-- **Default state is WAIT**: most days the dashboard will show no green lights. That is the point - the system protects you from low-quality trades.
+- **Default state is WAIT**: most days the dashboard will show no green lights. That is the point — the system protects you from low-quality trades.
 - **GO signal**: comes with entry window, suggested exit date, stop-loss, expected AUD return after fees and tax.
 - **All from raw prices**: no external predictions. The only thing entering the system is historical OHLCV data.
+- **Toggles never lower the bar.** Enhancements either sharpen the forecast or add extra safety filters; they never make a GO easier to fire than vanilla.
+
+For the full pipeline diagram and the role of each toggle, see [USER_GUIDE.md § 1.5](./USER_GUIDE.md#15-how-it-all-fits-together).
 
 ## Honest limitations
 
@@ -75,10 +94,15 @@ Optionally also point a Google Drive folder at the project root for a second cop
 
 ## Documentation
 
-- **[USER_GUIDE.md](./USER_GUIDE.md)** - plain-English user manual (also available in-app under the **Help** page; printable via Ctrl+P)
-- **[DOCS.md](./DOCS.md)** - technical reference: architecture, trust-grade math, every module explained
-- **[DEPLOY.md](./DEPLOY.md)** - step-by-step deploy to Streamlit Community Cloud for tablet access
-- **[IMPROVEMENTS.md](./IMPROVEMENTS.md)** - prioritised list of future enhancements (with deliberate restraint about what NOT to build)
+- **[USER_GUIDE.md](./USER_GUIDE.md)** — plain-English user manual (also available in-app under the **Help** page; printable via Ctrl+P).
+  - § 1.5 *How it all fits together* — the mental model with a pipeline diagram
+  - § 6 *Acting on a GO signal* — the disciplined-trade checklist
+  - § 6.5 *The Strategy Lab* — what each toggle does
+  - § 6.6 *Recommended toggle starter packs* — three ready-made combinations
+  - § 6.7 *Reading the diagnostic captions* — how to read the new Forward Outlook annotations
+- **[DOCS.md](./DOCS.md)** — technical reference: architecture, trust-grade math, the full data-flow diagram with all five toggle stages, every module explained
+- **[DEPLOY.md](./DEPLOY.md)** — step-by-step deploy to Streamlit Community Cloud for tablet access
+- **[IMPROVEMENTS.md](./IMPROVEMENTS.md)** — prioritised list of future enhancements (with deliberate restraint about what NOT to build), and which ones have already been built
 
 ## Disclaimer
 

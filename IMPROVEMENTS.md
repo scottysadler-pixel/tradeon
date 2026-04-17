@@ -7,12 +7,25 @@ Each item has:
 - **Effort** — rough build time
 - **Risk** — what could go wrong
 - **Honest take** — whether I'd actually do it
+- **Status** — `BUILT` if shipped, otherwise unmarked
+
+---
+
+## What's already shipped
+
+| Version | Items |
+|---------|-------|
+| **v1.1** | #1.1 Today's Playbook, #1.2 Trade Journal with self-grading, #1.3 broker deep-link, #1.4 clipboard order ticket, #1.5 "Why this signal?" explainer (in the Forward Outlook reasons expander), #2.4 FX vs stock attribution |
+| **v1.2** | Three Tier-2 enhancements as toggleable Strategy Lab features: GARCH(1,1) volatility forecast, cross-asset/macro confirmation, regime-stratified trust grade. Backtest fold-coverage fix (max_folds 60, prefer_recent). |
+| **v1.3** | Two Tier-3 enhancements: recency-weighted ensemble (`use_recency_weighted`), drawdown circuit-breaker (`use_drawdown_breaker`). Bundled price cache + nightly GitHub Action refresh (cold-start time 30-90s instead of 10-25min). USER_GUIDE rewritten with mental-model section + toggle starter packs + diagnostic-caption reading guide. |
+
+The items below are all `BUILT` per the table above. They're kept here as the original specs / reasoning, in case you ever want to revisit how something was scoped.
 
 ---
 
 ## TIER 1 — Highest impact, low cost, fits the existing philosophy
 
-### 1.1 — "Today's Playbook" single-screen view (SIMPLIFIES)
+### 1.1 — "Today's Playbook" single-screen view (SIMPLIFIES) — **BUILT (v1.1)**
 
 Add a new top-of-app panel showing exactly three things:
 
@@ -26,7 +39,7 @@ Why: collapses everything down to the question you actually came to answer. Redu
 - **Risk:** Almost none — it's a re-skin of existing data
 - **Honest take:** Strongly recommend. This is what daily users actually want.
 
-### 1.2 — Personal trade journal with self-grading (DEEPENS)
+### 1.2 — Personal trade journal with self-grading (DEEPENS) — **BUILT (v1.1)**
 
 A new page where you log trades you actually placed (manually — no broker integration needed). For each entry: ticker, buy date, buy price, sell date, sell price, AUD invested. The app then:
 
@@ -43,7 +56,7 @@ Why: the trust grade currently grades the model. This grades YOU. Over time you 
 - **Risk:** None — it's purely additive
 - **Honest take:** Strongly recommend. This is the single feature most likely to make you a better trader.
 
-### 1.3 — Deep-link to broker's symbol page (OPPORTUNITY — addresses your broker question)
+### 1.3 — Deep-link to broker's symbol page (OPPORTUNITY — addresses your broker question) — **BUILT (v1.1)**
 
 When a GO signal appears, add a button that opens the broker's web app directly on the right symbol's order ticket. Not the same as automatic ordering — you still review and submit yourself. But it removes 4-5 clicks of friction.
 
@@ -62,7 +75,7 @@ Why: the gap between "TRADEON says BUY MSFT" and "your finger taps the Buy butto
 - **Risk:** Broker URL formats can change without notice. Build it as a "best effort" link with a fallback to the broker's homepage.
 - **Honest take:** Recommend. Free win.
 
-### 1.4 — Clipboard-copy order ticket (OPPORTUNITY)
+### 1.4 — Clipboard-copy order ticket (OPPORTUNITY) — **BUILT (v1.1)**
 
 Alongside the deep link, a "Copy order details" button that puts a single line on your clipboard:
 
@@ -76,7 +89,7 @@ You then paste this into your broker's order ticket fields (or a notes app, or a
 - **Risk:** None
 - **Honest take:** Recommend. Tiny effort, removes a real source of mistakes.
 
-### 1.5 — "Why this signal?" explainer modal (DEEPENS)
+### 1.5 — "Why this signal?" explainer modal (DEEPENS) — **BUILT (v1.1, lives in the per-card "Why this signal fired (reasons)" expander on Forward Outlook)**
 
 For every GO signal, a button that pops a step-by-step audit:
 
@@ -142,7 +155,7 @@ Why: matches your stated mental model of "buy this quarter, sell next quarter." 
 - **Risk:** Forecasts beyond ~6 months get unreliable; need to show widening confidence bands honestly.
 - **Honest take:** Recommend cautiously. Add it but cap forecast horizons at 2 quarters and be loud about uncertainty in quarters 3-4.
 
-### 2.4 — FX vs stock attribution (DEEPENS — for US stocks)
+### 2.4 — FX vs stock attribution (DEEPENS — for US stocks) — **BUILT (v1.1)**
 
 For each US stock trade, split the AUD return into:
 
@@ -261,15 +274,13 @@ But this is the kind of feature that:
 
 ## What I'd build next, if you said "pick three"
 
-If you only have time for three improvements:
+The original "pick three" recommendation (#1.1, #1.2, #1.3+#1.4) is all built and in the live app. With 5 toggleable enhancements now also shipped, the next frontier is making the system more *autonomous* and more *opinionated about portfolio-level risk*. The new top-three list:
 
-1. **#1.1 Today's Playbook** — single-screen daily glance
-2. **#1.2 Trade journal with self-grading** — turns the system from a tool into a learning loop
-3. **#1.3 + #1.4 combined** (broker deep-link + clipboard ticket) — removes the friction between signal and action
+1. **#2.1 Signal-change notifications** (still TODO) — push or email when a stock flips WAIT → GO. The whole point of swing trading is "buy now, check back in a few months", so daily babysitting the app is unnecessary. The GitHub Actions cron + ntfy.sh combo would be the cleanest path. ~4-6h.
+2. **#2.5 Portfolio-level risk view** (still TODO) — once you start running 3+ open positions from the Journal, "how correlated are they really?" matters more than any single-stock signal. ~3-4h.
+3. **A new toggle: "GO needs a same-direction VIX move"** (idea, not yet specced) — only fire a GO if VIX has moved in the protective direction (down for longs) over the last 5 trading days. Adds a regime-momentum filter that complements toggle #2 (cross-asset confirmation) without overlap. ~2h.
 
-Total effort: ~6-8 hours. Result: an app that's noticeably more useful day-to-day without growing in complexity.
-
-After those three, the next-most-valuable single addition is **#2.1 notifications** — but only if you've genuinely outgrown checking the app daily.
+After those, the next genuine accuracy frontier is **toggle #6: Bayesian model-averaging** — a smarter version of recency-weighted that incorporates uncertainty about the weights themselves. But the diminishing returns are real; recency-weighting already captures most of the easy lift.
 
 ---
 

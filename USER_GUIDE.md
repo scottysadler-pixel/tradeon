@@ -11,12 +11,15 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 ## Contents
 
 1. [What TRADEON does in one paragraph](#1-what-tradeon-does-in-one-paragraph)
+1.5. [How it all fits together — the mental model](#15-how-it-all-fits-together)
 2. [Your first session — a 15-minute walkthrough](#2-your-first-session)
 3. [Reading the Dashboard](#3-reading-the-dashboard)
 4. [Reading a Deep Dive](#4-reading-a-deep-dive)
 5. [Using the Backtest Lab](#5-using-the-backtest-lab)
 6. [Acting on a GO signal](#6-acting-on-a-go-signal)
 6.5. [The Strategy Lab — toggling enhancements](#65-the-strategy-lab--toggling-enhancements)
+6.6. [Recommended toggle starter packs](#66-recommended-toggle-starter-packs)
+6.7. [Reading the diagnostic captions on Forward Outlook](#67-reading-the-diagnostic-captions-on-forward-outlook)
 7. [The trust grade in plain English](#7-the-trust-grade-in-plain-english)
 8. [Common questions](#8-common-questions)
 9. [What to do if something looks broken](#9-what-to-do-if-something-looks-broken)
@@ -27,6 +30,102 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 ## 1. What TRADEON does in one paragraph
 
 You give TRADEON a list of stocks you might want to trade (already configured: 15 ASX large caps and 6 US big-tech names). It downloads 20 years of daily prices for each one, runs five different statistical forecasting models, and grades itself on how accurate those models have been at predicting the recent past. Every now and then — usually no more than a few times a quarter — several signals line up at once on a particular stock and TRADEON issues a short-to-medium-term **GO** signal with a suggested entry window, exit date, stop-loss level, and expected after-fee, after-tax AUD return. Most days, on most stocks, TRADEON simply says **WAIT**. That is the correct default behaviour.
+
+You can also turn on up to **five opt-in enhancements** in the Strategy Lab page — they let you stress-test the system, sharpen the forecasts, or add safety filters. They all default to OFF so you always have the v1 baseline to compare against.
+
+---
+
+## 1.5 How it all fits together
+
+If you read nothing else, read this. It's the mental model for what's happening when you open the app.
+
+### The pipeline in one diagram
+
+When you open the Dashboard or Forward Outlook, every stock in your watchlist runs through this pipeline once (then results are cached for an hour):
+
+```text
+                        Raw 20 years of OHLCV
+                          (yfinance, cached)
+                                  │
+                                  ▼
+                   Convert US prices to AUD using
+                       historical AUD/USD
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+        REGIME              FORECAST              EVIDENCE
+    bull / bear /      Naive, Seasonal,       Hold-window match
+      sideways         Holt-Winters,          Technicals (RSI/MACD)
+       (HMM)           ARIMA, Prophet         Earnings windows
+                       → ENSEMBLE              Stop-loss level
+                                              Position size
+                                  │
+                                  ▼
+                          TRUST GRADE A-F
+                  (walk-forward backtest of the
+                   ensemble vs naive baseline,
+                       net of fees + tax)
+                                  │
+                                  ▼
+              ┌──────── decide() AND-gate ────────┐
+              │  Trust ≥ B  AND  regime ≠ bear    │
+              │  AND hold-window match            │
+              │  AND positive expected return     │
+              │  AND a technical confirmation     │
+              │  AND no earnings window           │
+              └─────────────────┬─────────────────┘
+                                ▼
+                     GO  /  WAIT  /  AVOID
+                                │
+              (post-decision safety filters, opt-in)
+                                │
+            ┌─── MACRO TOGGLE ──┼── BREAKER TOGGLE ───┐
+            ▼                   ▼                     ▼
+   Parent index in bear?   Down >15% in 30d?
+   VIX > 30?                                      → force WAIT
+            │                   │
+            └─── if any trips: GO → WAIT ─────────────┘
+                                │
+                                ▼
+                     Final signal shown to you
+                     (with full trade plan if GO)
+```
+
+### The five enhancement toggles, in order of how they affect the pipeline
+
+| # | Toggle | Where it plugs in | What it changes |
+|---|--------|-------------------|-----------------|
+| 4 | Recency-weighted ensemble | **Forecast step** | Re-weights the 3 sub-models by recent accuracy. Changes the actual forecast number going into the decider. |
+| 1 | GARCH volatility | **Position size step** | Doesn't change the GO/WAIT verdict at all. Adjusts how big a position you take *if* GO fires. |
+| 3 | Regime-stratified trust grade | **Trust-grade step** | Replaces the all-history grade with one computed only from same-regime quarters. Can promote or demote a stock's grade. |
+| 2 | Cross-asset confirmation | **After the decider** (safety filter) | If the parent index is bear OR VIX > 30, force any GO down to WAIT. |
+| 5 | Drawdown circuit-breaker | **After the decider** (safety filter) | If the stock is down >15% from its 30-day peak, force any GO down to WAIT. |
+
+### Why five toggles instead of just always-on
+
+Three reasons:
+
+1. **You can SEE the impact.** Without toggles, you'd have to take it on faith that "macro confirmation helps". With the Strategy Lab you flip it on, run a real backtest, and see the trust score actually move.
+2. **What helps MSFT may hurt CSL.AX.** A toggle that's perfect for high-volatility US tech can be unnecessary noise on a steady ASX dividend stock. You decide which to keep on.
+3. **Each toggle is a different lever.** The recency-weighted toggle actually changes what the model predicts. The drawdown breaker doesn't change the prediction at all — it overrides the verdict. They're different kinds of help, so they're separate switches.
+
+### What "vanilla" means
+
+When all five toggles are OFF, you get the v1 baseline behaviour:
+- Equal-weight ensemble of prophet/holt-winters/arima
+- Trust grade computed across all historical quarters (any regime)
+- Position size scaled by trailing 90-day stdev only
+- No macro filter; a single-stock GO can fire even in a bear market
+- No drawdown filter; a falling-knife stock can still be issued a GO
+
+That's the conservative-but-naive starting point. The toggles let you trade off "more conservative" vs "more aware" vs "more reactive" without rebuilding anything.
+
+### What stays the same regardless of toggles
+
+- **The trust grade is always honest.** It's always the result of a real walk-forward backtest. Even if you turn on every enhancement, if the model can't beat naive on a stock, that stock stays at C/D/F.
+- **The default is always WAIT.** GO requires multiple signals to align. Toggles only ever add filters or refine forecasts — they never lower the bar for what counts as GO.
+- **All numbers are still net of fees and AU CGT.** Every backtest, every projection, every position size includes broker fees and tax. The toggles don't change this.
+- **Nothing leaves your machine.** Even with toggles on, the only thing entering the system is OHLCV from yfinance. No news scraping, no LLM commentary, no analyst targets.
 
 ---
 
@@ -310,6 +409,123 @@ You can always click **"Reset to vanilla"** to go back to v1 baseline behaviour.
 ### Honest expectations
 
 A combined lift of +5 to +15 trust points across the watchlist is a *very* good result. +20 or more is suspicious — check whether you're inadvertently overfitting to recent data. 0 or negative on most stocks means the toggle just isn't earning its keep — that's also useful information, and it's the system being honest with you.
+
+### How to read the Strategy Lab comparison table
+
+When you click **"Run comparison: ON vs OFF"** the table shows one row per configuration:
+
+| Row | What it tells you |
+|-----|-------------------|
+| **Vanilla (all OFF)** | The v1 baseline. Treat this as the "score to beat". |
+| **+ regime-grade** | Trust grade re-computed using only the same-regime past quarters. Look at whether the Trust Score moved up or down — sometimes a stock looks worse in its current regime than across all history (that's an honest finding). |
+| **+ GARCH** | Doesn't change the trust score; the Notes column tells you the position-size and CI multipliers GARCH would apply right now. |
+| **+ macro confirm** | Doesn't change the trust score; Notes tells you whether the macro mood would currently BLOCK or NOT block a live GO. |
+| **+ recency-weighted** | Re-runs the backtest with the new ensemble weights, so the Trust Score column is meaningful. The Notes column shows you the actual weight each sub-model got (e.g. `prophet=33%, holt_winters=29%, arima=37%`). |
+| **+ drawdown breaker** | Doesn't change the trust score; Notes tells you whether the breaker is currently TRIGGERED or idle on this stock. |
+
+**The trust score is the headline number to watch.** A lift of >5 points across multiple stocks = real edge. <5 points or inconsistent across stocks = noise. Negative = leave the toggle off.
+
+---
+
+## 6.6 Recommended toggle starter packs
+
+You don't have to figure out the optimal combo on day one. Here are three sensible starting configurations.
+
+### Starter pack A — "Conservative defender" (recommended for new users)
+
+**Toggles ON:** macro confirm, drawdown breaker
+
+**Why:** these are the two safety filters. They never create new GO signals — they only suppress GOs that look risky in context. You keep the v1 forecasting behaviour you already trust, but get two extra layers of "should I really be buying this right now?" protection.
+
+**Best for:** anyone who's already comfortable with the v1 baseline and just wants to avoid the obvious traps (buying into a falling knife or against a bearish overall market).
+
+**What to expect:** slightly fewer GO signals overall. Each GO that does fire has cleared an extra two checks.
+
+### Starter pack B — "Sharper forecasts" (if you want better predictions)
+
+**Toggles ON:** recency-weighted, GARCH
+
+**Why:** these two improve the *quality* of the forecast and the *quality* of the position sizing without adding any safety filters. Recency-weighting lets the best-performing sub-model dominate; GARCH right-sizes positions for the actual volatility regime.
+
+**Best for:** users who want their existing GO signals to be more accurate and right-sized, without changing how often they fire.
+
+**What to expect:** GO signals fire at the same rate as vanilla. Each one has a forecast that better reflects which sub-model is currently in form, and a position size that breathes with volatility.
+
+### Starter pack C — "Defender + sharpener" (the most you'd realistically run)
+
+**Toggles ON:** macro confirm, drawdown breaker, recency-weighted, GARCH
+
+**Why:** combines packs A and B. You get sharper forecasts, smarter sizing, and both safety filters. Skip regime-stratified grade unless your watchlist has at least 5 same-regime folds for most stocks (it falls back to vanilla anyway when the data is thin).
+
+**Best for:** users who've already spent some time in the Strategy Lab and confirmed that each of these toggles helps individually on most of the watchlist.
+
+**What to expect:** noticeably fewer GO signals than vanilla (because of the two safety filters). The ones that do fire are doubly-vetted and right-sized.
+
+### When to turn on regime-stratified trust grade
+
+Toggle 3 is the most situational. Turn it ON if:
+
+- The current regime is **bear** or **sideways** AND your trust grades from the vanilla setting feel implausibly high (because the all-history grade was buoyed by years of bull-market accuracy).
+- You're noticing the model predicting strong upside on a stock during a clearly weak macro period — regime-stratifying often deflates that.
+
+Leave it OFF if:
+
+- The current regime is **bull** AND your watchlist has reasonable history. The all-history grade and the bull-only grade will be very similar.
+- A stock has fewer than 5 same-regime folds — the toggle silently falls back to vanilla anyway, so it's a no-op there.
+
+---
+
+## 6.7 Reading the diagnostic captions on Forward Outlook
+
+When you have any of the new toggles ON, the **Forward Outlook** page adds small caption lines under each GO card that tell you exactly how the toggles influenced the verdict. Here's how to read them.
+
+### Caption: "Volatility forecast (garch(1,1)): expected vol 28.4% vs trailing 24.1% — slightly elevated"
+
+**Toggle:** GARCH
+
+- **garch(1,1)** = the model successfully fit. If it says **rolling-stdev-fallback**, GARCH didn't converge and the system fell back to a simpler trailing-vol estimate (still useful, but less responsive to clustering).
+- **Expected vol** = annualised volatility GARCH forecasts for the next 90 days.
+- **Trailing vol** = annualised volatility over the trailing 90 days for comparison.
+- **"Slightly elevated"** / **"Elevated"** / **"Calm"** = plain-English summary.
+- **What it changed:** the position-size metric on the GO card was multiplied by `1/vol_ratio`, so a high-vol forecast shrinks the suggested AUD amount.
+
+### Caption: "Macro: parent ^GSPC neutral; VIX 18.2 (calm). Mood: favourable."
+
+**Toggle:** Cross-asset confirmation
+
+- **Parent index** = ^GSPC for US stocks, ^AXJO for ASX stocks. Its current regime is shown.
+- **VIX** = the US fear index. Below 20 = calm, 20-30 = elevated, above 30 = panic.
+- **Mood** = `favourable` / `neutral` / `hostile`. Only `hostile` blocks a GO.
+- **What it changed:** if mood was `hostile`, this card wouldn't be on this page — its GO would have been forced to WAIT.
+
+### Caption: "Forecast weighting: Last 5 folds: arima has been most accurate (weight 37%); holt_winters least accurate (weight 29%). Vanilla equal-weight would give each 33%."
+
+**Toggle:** Recency-weighted ensemble
+
+- Tells you which sub-model the recency weighting is currently favouring and by how much.
+- Sometimes you'll see **"Last 5 folds: all sub-models within ~15% of each other"** — that means the weighting is barely different from vanilla 33% / 33% / 33%, and the forecast is essentially the same as vanilla.
+- **What it changed:** the forecast number on this card was computed using these weights instead of 1/3 each.
+
+### Caption: "Circuit-breaker: Recent drawdown -8.2% from peak 612.50 on 2026-04-02. Below the 15% breaker threshold — GO signals not blocked."
+
+**Toggle:** Drawdown circuit-breaker
+
+- Tells you the current drawdown vs the 30-day peak, with the date.
+- If you see **"TRIGGERED"** instead of "Below the 15% threshold", this card wouldn't be on this page — its GO would have been forced to WAIT, and the headline of the WAIT card would explain the breaker fired.
+- **What it changed:** nothing visible if idle. If triggered, it's the reason a stock that the forecast otherwise liked is sitting in WAIT.
+
+### A worked example
+
+Say you turn on `recency + GARCH + macro + breaker` and visit Forward Outlook. You see one GO card for MSFT with these captions:
+
+```text
+Volatility forecast (garch(1,1)): expected vol 24% vs trailing 21% — modestly elevated
+Macro: parent ^GSPC bull; VIX 16.4 (calm). Mood: favourable.
+Forecast weighting: Last 5 folds: arima has been most accurate (weight 41%)
+Circuit-breaker: Recent drawdown -2.1% from peak — GO signals not blocked.
+```
+
+Translation: "All four safety/sharpness filters say green. The macro is supportive, the stock isn't falling, ARIMA has been our most accurate forecaster lately, and we'll trim position size slightly because GARCH expects a modest vol uptick." That's a higher-confidence GO than the same card under vanilla settings would have been.
 
 ---
 
