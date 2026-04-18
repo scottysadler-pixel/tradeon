@@ -142,7 +142,10 @@ def test_backtest_prefers_recent_folds():
     last_test_date = pd.Timestamp(last_test["date"].iloc[-1])
     data_end_date = pd.Timestamp(df["date"].iloc[-1])
     days_from_end = (data_end_date - last_test_date).days
-    assert days_from_end < 100, f"Last fold ends {days_from_end} days before data end"
+    # horizon_days=90 is BUSINESS days, which is ~126 calendar days. Use a
+    # generous calendar-day threshold so the assertion stays meaningful
+    # (ensures it's "near the end") without flaking on business-vs-calendar.
+    assert days_from_end < 140, f"Last fold ends {days_from_end} days before data end"
 
 
 def test_backtest_old_default_oldest_folds():
