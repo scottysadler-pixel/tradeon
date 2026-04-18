@@ -1,0 +1,75 @@
+name: Tests
+
+# Run the test suite on every push to main and on every pull request.
+# This is the safety net that catches regressions BEFORE Streamlit Cloud
+# users hit them. The smoke suite (tests/test_pipeline_smoke.py) reads the
+# committed parquet cache so it never needs the network.
+#
+# You can also trigger this by hand from the Actions tab.
+
+on:
+  push:
+    branches: [main]
+    # Skip when only the parquet cache changed - the nightly cache-refresh
+    # bot commits to data_cache/ and we don't want every refresh to
+    # re-trigger a 15-minute test run that re-tests the same code.
+    paths-ignore:
+      - "data_cache/**"
+      - "**/*.md"
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Cancel an older run if a new one starts on the same branch.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        # Match the version Streamlit Cloud uses (pinned via runtime.txt)
+        # so any wheel-availability surprises show up here, not on deploy.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Quick checks (syntax + import resolution, ~5s)
+        # Fail fast on the cheap stuff before spending 10+ minutes on
+        # the full pipeline. This is the layer that catches stale-import
+        # bugs like the v1.3 Enhancements regression.
+        run: |
+          pytest tests/test_pipeline_smoke.py \
+            -v --tb=short \
+            -k "compiles or imports_resolve"
+
+      - name: Unit + fallback tests (~30s)
+        run: |
+          pytest \
+            tests/test_smoke.py \
+            tests/test_tier1.py \
+            tests/test_tier2.py \
+            tests/test_tier3.py \
+            tests/test_data_fallback.py \
+            -v --tb=short
+
+      - name: Pipeline smoke (per-toggle x ASX/US ticker, ~10min)
+        # The expensive end-to-end check. Sources data exclusively from the
+        # committed parquet cache so it never hits yfinance.
+        run: |
+          pytest tests/test_pipeline_smoke.py \
+            -v --tb=short \
+            -k "analyse_one or analyse_all"
