@@ -62,10 +62,22 @@ EXTRA_FETCHES: list[tuple[str, int, bool]] = [
 
 
 def _fetch_one(symbol: str, years: int, adjusted: bool) -> dict:
-    """Force-refresh one symbol; return a manifest entry."""
+    """Force-refresh one symbol; return a manifest entry.
+
+    Crucially passes `allow_stale_fallback=False` so a yfinance failure
+    actually fails this symbol instead of being silently masked by the
+    existing cache file - otherwise the MANIFEST.json would lie about
+    successful refreshes.
+    """
     started = time.perf_counter()
     try:
-        df = fetch_history(symbol, years=years, adjusted=adjusted, force_refresh=True)
+        df = fetch_history(
+            symbol,
+            years=years,
+            adjusted=adjusted,
+            force_refresh=True,
+            allow_stale_fallback=False,
+        )
         elapsed = time.perf_counter() - started
         first = df["date"].iloc[0].strftime("%Y-%m-%d") if len(df) else None
         last = df["date"].iloc[-1].strftime("%Y-%m-%d") if len(df) else None

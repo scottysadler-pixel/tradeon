@@ -29,6 +29,10 @@ def _resolve_cache_dir() -> Path:
       1. $TRADEON_CACHE_DIR if set (lets cloud platforms override)
       2. <repo_root>/data_cache (the normal local case)
       3. <tempdir>/tradeon_cache (fallback for read-only deploys)
+
+    If every candidate is unwritable we log loudly and return the bare
+    system tempdir; callers will then get OSError on the next write
+    instead of subtle silent breakage.
     """
     override = os.environ.get("TRADEON_CACHE_DIR")
     candidates = [
@@ -47,7 +51,12 @@ def _resolve_cache_dir() -> Path:
             return cand
         except Exception as e:  # noqa: BLE001
             logger.warning("Cache dir %s not writable: %s", cand, e)
-    return Path(tempfile.gettempdir())
+    fallback = Path(tempfile.gettempdir())
+    logger.error(
+        "No writable cache directory found; falling back to %s. Subsequent "
+        "cache writes will likely fail.", fallback,
+    )
+    return fallback
 
 
 CACHE_DIR = _resolve_cache_dir()
@@ -124,6 +133,7 @@ def fetch_history(
     years: int = DEFAULT_LOOKBACK_YEARS,
     adjusted: bool = True,
     force_refresh: bool = False,
+    allow_stale_fallback: bool = True,
 ) -> pd.DataFrame:
     """Download and cache OHLCV history for a single symbol.
 
@@ -133,12 +143,14 @@ def fetch_history(
          path - no network call.
       2. Otherwise, try yfinance. If it succeeds, write a fresh cache and
          return the new data.
-      3. If yfinance fails BUT a stale cache file exists, fall back to the
-         stale cache with a warning. A slightly-old forecast is infinitely
+      3. If yfinance fails BUT a stale cache file exists AND
+         `allow_stale_fallback=True` (the default), fall back to the stale
+         cache with a warning. A slightly-old forecast is infinitely
          better than a totally broken Dashboard. (This is the path that
          keeps Streamlit Cloud working when yfinance is rate-limited from
          the platform's egress IPs - which happens often.)
-      4. Only if yfinance fails AND no cache exists do we re-raise.
+      4. If yfinance fails AND (`allow_stale_fallback=False` OR no cache
+         exists), re-raise.
 
     Parameters
     ----------
@@ -149,7 +161,14 @@ def fetch_history(
                because adjusted history can look wrong vs Yahoo's own chart.
     force_refresh : skip the freshness check and go straight to yfinance.
                     Stale-cache fallback still applies if the network call
-                    fails.
+                    fails (unless `allow_stale_fallback=False`).
+    allow_stale_fallback : when True (default - what the running app wants),
+                    a yfinance failure transparently degrades to the cached
+                    parquet so the UI keeps working. When False (what
+                    `scripts/refresh_cache.py` wants), a yfinance failure
+                    propagates so the cache-refresh job knows the symbol
+                    really couldn't be refreshed and won't lie in the
+                    MANIFEST.json by reporting success.
     """
     path = _cache_path(symbol, adjusted)
 
@@ -169,6 +188,8 @@ def fetch_history(
             logger.warning("Cache write failed for %s: %s", symbol, e)
         return df
     except Exception as net_err:  # noqa: BLE001
+        if not allow_stale_fallback:
+            raise
         # Step 3: stale-cache fallback.
         cached = _read_cached_parquet(path)
         if cached is not None:

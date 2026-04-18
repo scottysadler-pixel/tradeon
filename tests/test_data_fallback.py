@@ -26,13 +26,21 @@ import pytest
 
 @pytest.fixture
 def tmp_cache(tmp_path, monkeypatch):
-    """Point CACHE_DIR at a fresh temp directory and reload the module."""
+    """Point CACHE_DIR at a fresh temp directory and reload the module.
+
+    Cleanup ordering matters here: monkeypatch's env-var teardown happens
+    AFTER this fixture's post-yield code by default (LIFO), so we must
+    explicitly `monkeypatch.undo()` before the second reload, otherwise
+    `core.data` gets reloaded while still pointing at the soon-to-be-deleted
+    tmp_path, polluting any later test that touches `core.data.CACHE_DIR`.
+    """
     monkeypatch.setenv("TRADEON_CACHE_DIR", str(tmp_path))
     import importlib
     from core import data
     importlib.reload(data)
     yield tmp_path, data
-    importlib.reload(data)  # restore original CACHE_DIR for other tests
+    monkeypatch.undo()  # un-set env var BEFORE reloading
+    importlib.reload(data)  # now picks up the original (repo-root) CACHE_DIR
 
 
 def _fake_history(rows: int = 5_000, *, last_close: float = 100.0) -> pd.DataFrame:
@@ -119,3 +127,22 @@ def test_force_refresh_still_falls_back_on_failure(tmp_cache):
     with patch("core.data._fetch_from_yfinance", side_effect=RuntimeError("flaky")):
         result = data.fetch_history("FORCED", adjusted=True, force_refresh=True)
     assert result["close"].iloc[-1] == pytest.approx(7.0)
+
+
+def test_allow_stale_fallback_false_propagates_failure(tmp_cache):
+    """Cache-refresh script needs failures to actually fail (not be silently
+    masked by the existing cache file). With allow_stale_fallback=False, a
+    yfinance error must propagate even though a cached parquet exists."""
+    tmp_path, data = tmp_cache
+    fake = _fake_history(last_close=99.0)
+    cache_path = data._cache_path("REFRESH_FAIL", adjusted=True)
+    fake.to_parquet(cache_path, index=False)
+
+    with patch("core.data._fetch_from_yfinance", side_effect=RuntimeError("nope")):
+        with pytest.raises(RuntimeError, match="nope"):
+            data.fetch_history(
+                "REFRESH_FAIL",
+                adjusted=True,
+                force_refresh=True,
+                allow_stale_fallback=False,
+            )
