@@ -55,14 +55,18 @@ CACHE_DIR = _resolve_cache_dir()
 # Pull this many years of history by default.
 DEFAULT_LOOKBACK_YEARS = 20
 
-# Cache TTL - if cached file is younger than this, use it.
-# Default 36h is chosen so files written by the nightly cache-refresh
-# GitHub Action stay fresh for the entire trading day even if the action
-# runs slightly late or fails once. Override with $TRADEON_CACHE_TTL_HOURS.
+# Cache TTL - if cached file is younger than this, use it directly.
+# Bumped from 36h -> 14 days because Streamlit Cloud sets parquet mtimes to
+# the deploy time (not commit time), so a deploy that hasn't been touched
+# in a few days would otherwise mark every cache file as "stale" and start
+# hammering yfinance, which is frequently blocked from cloud platform IPs.
+# 14 days is comfortably longer than typical Streamlit Cloud deploy intervals
+# and the nightly cache-refresh GitHub Action keeps committed files much
+# fresher than that anyway. Override with $TRADEON_CACHE_TTL_HOURS.
 try:
-    CACHE_TTL_HOURS = int(os.environ.get("TRADEON_CACHE_TTL_HOURS", "36"))
+    CACHE_TTL_HOURS = int(os.environ.get("TRADEON_CACHE_TTL_HOURS", "336"))
 except ValueError:
-    CACHE_TTL_HOURS = 36
+    CACHE_TTL_HOURS = 336
 
 
 def _cache_path(symbol: str, adjusted: bool) -> Path:
@@ -78,30 +82,19 @@ def _is_fresh(path: Path, ttl_hours: int = CACHE_TTL_HOURS) -> bool:
     return age < timedelta(hours=ttl_hours)
 
 
-def fetch_history(
-    symbol: str,
-    *,
-    years: int = DEFAULT_LOOKBACK_YEARS,
-    adjusted: bool = True,
-    force_refresh: bool = False,
-) -> pd.DataFrame:
-    """Download and cache OHLCV history for a single symbol.
+def _read_cached_parquet(path: Path) -> pd.DataFrame | None:
+    """Read a parquet cache file, returning None on any read failure."""
+    if not path.exists():
+        return None
+    try:
+        return pd.read_parquet(path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Cache read failed for %s: %s", path.name, e)
+        return None
 
-    Parameters
-    ----------
-    symbol : e.g. "MSFT" or "BHP.AX".
-    adjusted : True for total-return analysis (dividend & split adjusted),
-               False for chart display (matches what you see on Yahoo's site).
-               For ASX `.AX` symbols, `False` is recommended for display
-               because adjusted history can look wrong vs Yahoo's own chart.
-    """
-    path = _cache_path(symbol, adjusted)
-    if not force_refresh and _is_fresh(path):
-        try:
-            return pd.read_parquet(path)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("Cache read failed for %s, will refetch: %s", symbol, e)
 
+def _fetch_from_yfinance(symbol: str, *, years: int, adjusted: bool) -> pd.DataFrame:
+    """Pull fresh history from yfinance and return it in our canonical shape."""
     end = datetime.today()
     start = end - timedelta(days=years * 366)
 
@@ -122,12 +115,71 @@ def fetch_history(
     df = df[["Date", "Open", "High", "Low", "Close", "Volume"]].copy()
     df.columns = ["date", "open", "high", "low", "close", "volume"]
     df = df.dropna(subset=["close"]).reset_index(drop=True)
-
-    try:
-        df.to_parquet(path, index=False)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Cache write failed for %s: %s", symbol, e)
     return df
+
+
+def fetch_history(
+    symbol: str,
+    *,
+    years: int = DEFAULT_LOOKBACK_YEARS,
+    adjusted: bool = True,
+    force_refresh: bool = False,
+) -> pd.DataFrame:
+    """Download and cache OHLCV history for a single symbol.
+
+    Robustness contract:
+
+      1. If the cache is fresh (younger than CACHE_TTL_HOURS), use it. Fast
+         path - no network call.
+      2. Otherwise, try yfinance. If it succeeds, write a fresh cache and
+         return the new data.
+      3. If yfinance fails BUT a stale cache file exists, fall back to the
+         stale cache with a warning. A slightly-old forecast is infinitely
+         better than a totally broken Dashboard. (This is the path that
+         keeps Streamlit Cloud working when yfinance is rate-limited from
+         the platform's egress IPs - which happens often.)
+      4. Only if yfinance fails AND no cache exists do we re-raise.
+
+    Parameters
+    ----------
+    symbol : e.g. "MSFT" or "BHP.AX".
+    adjusted : True for total-return analysis (dividend & split adjusted),
+               False for chart display (matches what you see on Yahoo's site).
+               For ASX `.AX` symbols, `False` is recommended for display
+               because adjusted history can look wrong vs Yahoo's own chart.
+    force_refresh : skip the freshness check and go straight to yfinance.
+                    Stale-cache fallback still applies if the network call
+                    fails.
+    """
+    path = _cache_path(symbol, adjusted)
+
+    # Step 1: fresh cache - fast path.
+    if not force_refresh and _is_fresh(path):
+        cached = _read_cached_parquet(path)
+        if cached is not None:
+            return cached
+        # Fall through to refetch on read failure.
+
+    # Step 2: try the network.
+    try:
+        df = _fetch_from_yfinance(symbol, years=years, adjusted=adjusted)
+        try:
+            df.to_parquet(path, index=False)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Cache write failed for %s: %s", symbol, e)
+        return df
+    except Exception as net_err:  # noqa: BLE001
+        # Step 3: stale-cache fallback.
+        cached = _read_cached_parquet(path)
+        if cached is not None:
+            logger.warning(
+                "yfinance failed for %s (%s); falling back to cached data "
+                "(may be slightly stale).",
+                symbol, net_err,
+            )
+            return cached
+        # Step 4: nothing to fall back to - bubble up the original error.
+        raise
 
 
 def fetch_history_both(symbol: str, *, years: int = DEFAULT_LOOKBACK_YEARS) -> dict[str, pd.DataFrame]:
