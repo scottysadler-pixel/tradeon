@@ -585,9 +585,12 @@ A: TRADEON doesn't store any personal data. The only thing that travels is OHLCV
 | "Oh no" generic error page | Check the build logs in Streamlit Cloud → "Manage app" |
 | Dashboard hangs >30 minutes on first load | Cancel and reload; Streamlit Cloud may have throttled. Try off-peak hours. |
 | A specific stock shows no data | Yahoo may have changed its symbol. Edit `core/tickers.py` to remove or update it. |
+| "**21 of 21 symbols failed to load**" or similar | Yahoo Finance is rate-limiting your cloud host. As of v1.3.1 the app should auto-fall-back to the on-disk cache and keep working with slightly-stale prices (you'll see a `using stale cache` warning in the logs). If it doesn't, the bundled `data_cache/*.parquet` files probably got out of sync with `core/tickers.py` — wait for the next nightly refresh action to run, or trigger it manually from GitHub Actions → "Refresh price cache" → Run workflow. |
+| Dashboard data feels old | Cache TTL is 14 days (intentionally generous so brief outages don't cascade). Click **Refresh all** at the top of the Dashboard to force a re-fetch. Or wait — the GitHub Action refreshes the bundled cache every weekday morning. |
 | Trust grade dropped sharply | Recent market shock — this is the system reacting honestly. Wait a few weeks for it to stabilise. |
 | Cloud app is slow to wake | Free tier sleeps after 7 days idle. First visit takes ~30 sec to wake. |
 | Local app won't start | Activate the venv (`.\.venv\Scripts\Activate.ps1`) then `streamlit run app.py` |
+| Strategy Lab error like `Enhancements got an unexpected keyword argument` | Schema drift after a deploy. Click the **"Clear cached settings + cache"** button at the top of the Strategy Lab page — it rebuilds the settings object and clears the pipeline cache. |
 
 If you want me (the assistant) to debug, copy the last 30-50 lines of the build/runtime log from "Manage app" and paste them in chat.
 

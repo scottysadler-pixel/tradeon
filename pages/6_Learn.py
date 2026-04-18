@@ -20,6 +20,97 @@ st.markdown(
     "Nothing here is financial advice - it's the practical mechanics."
 )
 
+with st.expander("**How TRADEON works in 60 seconds (start here)**", expanded=False):
+    st.markdown(
+        """
+        TRADEON does **four** things in order, every time you open the Dashboard:
+
+        1. **Load data** — 20 years of daily prices for each watchlist stock.
+           US stocks are converted to AUD using the historical exchange rate.
+        2. **Forecast** — five different statistical models (naive, seasonal,
+           Holt-Winters, ARIMA, Prophet) each predict the next 90 days. They're
+           combined into an **ensemble** prediction that usually beats any
+           single model.
+        3. **Grade itself** — a **walk-forward backtest** asks "if I'd been
+           using this model for the last 10 years on this stock, would I have
+           actually made money, after broker fees and AU CGT?" The result is
+           the A-F **trust grade**.
+        4. **Decide** — only when ALL of the following are true does a stock
+           get a GO signal: trust grade A or B, regime bull/sideways, an
+           active hold-window matches, forecast lift is materially positive,
+           a technical confirms, and no earnings window is active. Otherwise
+           you see WAIT (the default) or AVOID.
+
+        That's it. **Most days, most stocks show WAIT.** That is the system
+        being conservative on purpose, not failing.
+
+        For the full picture (with diagrams), open the **Help** page.
+        """
+    )
+
+with st.expander("**The five Strategy Lab toggles in one minute**", expanded=False):
+    st.markdown(
+        """
+        TRADEON ships with five **opt-in** enhancements you can flip on the
+        **Strategy Lab** page. They all default OFF so you always have the
+        v1 baseline to compare against. Each one earns its keep individually
+        before you turn it on globally.
+
+        | # | Toggle | What it actually does | Best for |
+        |---|--------|----------------------|----------|
+        | 1 | **GARCH volatility** | Forecasts how much the next 90 days will SWING (not where they'll go) and resizes positions accordingly. Doesn't change GO/WAIT — only how big a trade is. | Spreading risk evenly across calm and jumpy stocks. |
+        | 2 | **Cross-asset confirm** | Before letting any GO fire, checks the parent index (S&P 500 / ASX 200) and the VIX fear index. If either looks hostile, downgrades GO → WAIT. | Avoiding getting steamrolled by a bad overall market. |
+        | 3 | **Regime-stratified grade** | Computes the trust grade only on past quarters that match TODAY's regime, instead of all history. | When today's market doesn't look like the long-run average. |
+        | 4 | **Recency-weighted ensemble** | Re-weights the 3 forecast sub-models by recent accuracy instead of equal 33%/33%/33%. | Stocks where one sub-model has clearly been winning lately. |
+        | 5 | **Drawdown circuit-breaker** | If a stock has fallen >15% from its peak in 30 days, force any GO → WAIT. | Avoiding "buy the falling knife" disasters. |
+
+        **Recommended starter pack:** turn on toggles **2 + 5** (the two
+        safety filters). They never create new GO signals — they only
+        suppress risky ones. You keep the v1 forecasting you already trust,
+        plus two extra "should I really buy this right now?" checks.
+
+        Full details, tuning guide, and how to read the on-card diagnostics
+        live in the **Help** page (sections 6.5-6.7).
+        """
+    )
+
+with st.expander("**What to do when you see your first GO signal**", expanded=False):
+    st.markdown(
+        """
+        It will happen rarely. When it does, **don't panic-buy**. Work
+        through this checklist first.
+
+        **Before placing the trade:**
+
+        - [ ] **Trust grade is A or B?** If only C, treat as suggestive, not actionable.
+        - [ ] **Regime is bull or sideways?** Never act on a GO during a bear regime.
+        - [ ] **The hold-window's historical hit rate is above 65%?** Found on the Deep Dive page.
+        - [ ] **Expected return after fees + tax is materially positive?** A predicted +1.5% net AUD over 90 days isn't worth the risk; aim for +5% net or more.
+        - [ ] **You can afford to lose this entire position.** Never trade money you need.
+        - [ ] **No earnings volatility window is active?** Shown on the Forward Outlook plan.
+
+        **Place the trade:**
+
+        - Open the **Forward Outlook** page → expand "How to actually place this trade".
+        - Click **Copy** on the order ticket — paste into your broker's order screen.
+        - **Always use a LIMIT order**, never a market order. Set the limit price as suggested.
+        - Set the **stop-loss** at the suggested level. Most brokers let you attach this to the order.
+        - Add the suggested **exit date** to your calendar with a reminder.
+
+        **Manage the trade:**
+
+        - Daily check-ins are enough. Stop watching it hourly.
+        - **If the price hits your stop-loss, sell. No exceptions.** That's why you set it in advance.
+        - **If the exit date arrives, sell** — even if currently down. "Just one more month" is how small losses become big ones.
+
+        **After the trade:** record it in the **Trade Journal** page. The
+        journal computes your personal hit rate, your average days held, and
+        — most usefully — your hit rate on trades you took AGAINST a WAIT
+        signal. That last metric is the truest test of "should I trust my
+        gut over the system?"
+        """
+    )
+
 with st.expander("**What is a share?**", expanded=False):
     st.markdown(
         """

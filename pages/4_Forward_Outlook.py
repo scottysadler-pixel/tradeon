@@ -127,10 +127,48 @@ for c in go_signals:
         wt = walkthrough_gen(sig, t, capital_aud=capital, broker=broker, spot_price_aud=spot)
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Expected return", pct(sig.expected_return_pct))
-        m2.metric("Position size", aud(size.suggested_aud), delta=f"{size.shares} shares{size_note}")
-        m3.metric("Stop-loss", aud(sig.suggested_stop_price))
-        m4.metric("Confidence", f"{sig.confidence:.0%}")
+        m1.metric(
+            "Expected return",
+            pct(sig.expected_return_pct),
+            help=(
+                "Forecast lift over the suggested hold window, **net of broker "
+                "fees and AU CGT**, in AUD. A positive number is what you'd "
+                "actually pocket. Treat anything under +5% as marginal — the "
+                "trust grade better be A or B before you act on a thin lift."
+            ),
+        )
+        m2.metric(
+            "Position size",
+            aud(size.suggested_aud),
+            delta=f"{size.shares} shares{size_note}",
+            help=(
+                "Suggested AUD amount and share count, sized so this trade "
+                "carries similar dollar-risk to your other watchlist trades. "
+                "Scaled by trailing 90-day volatility (and by GARCH if "
+                "toggle 1 is on). Smaller for jumpy stocks, larger for calm ones."
+            ),
+        )
+        m3.metric(
+            "Stop-loss",
+            aud(sig.suggested_stop_price),
+            help=(
+                "The price you decide IN ADVANCE to sell at if the trade goes "
+                "against you. Set roughly 1 typical drawdown below entry. "
+                "Most brokers let you attach this as a conditional sell when "
+                "you place the buy. **No exceptions** if it triggers."
+            ),
+        )
+        m4.metric(
+            "Confidence",
+            f"{sig.confidence:.0%}",
+            help=(
+                "How strongly the decider's signals agreed. 100% = every "
+                "check passed cleanly; 50% = it was a near miss. If a safety "
+                "filter (macro or drawdown breaker) downgraded a GO, you "
+                "won't see this card at all — only clean, high-confidence "
+                "GOs reach this page."
+            ),
+        )
 
         if getattr(enh, "use_garch", False) and c.get("vol") is not None:
             st.caption(f"Volatility forecast ({c['vol'].method}): {c['vol'].interpretation}")

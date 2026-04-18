@@ -35,7 +35,7 @@ TRADEON/
 ├── core/                      ← All business logic — zero Streamlit imports
 │   ├── tickers.py             ← The 21-stock watchlist
 │   ├── glossary.py            ← Definitions for tooltips & education
-│   ├── data.py                ← yfinance fetch + Parquet cache (TTL 36h)
+│   ├── data.py                ← yfinance fetch + Parquet cache (TTL 14d) with stale-cache fallback
 │   ├── fx.py                  ← AUD/USD conversion
 │   ├── costs.py               ← AU broker fees + CGT logic
 │   ├── analysis.py            ← Stats, seasonality, EOFY pattern
@@ -62,7 +62,8 @@ TRADEON/
 │   ├── refresh_cache.py       ← Re-fetch all watchlist OHLCV → data_cache/*.parquet
 │   └── compare_enhancements.py ← Diagnostic: side-by-side accuracy across all 8 toggle combos
 ├── .github/workflows/
-│   └── refresh-cache.yml      ← Weekday-morning GitHub Action that runs refresh_cache.py
+│   ├── refresh-cache.yml      ← Weekday-morning GitHub Action that runs refresh_cache.py
+│   └── tests.yml              ← Per-push CI: static checks + unit + pipeline smoke
 ├── tests/                     ← Synthetic + live pytest suites
 ├── data_cache/                ← Local Parquet cache (gitignored)
 ├── .streamlit/config.toml     ← Theme + cloud-friendly server config
@@ -277,7 +278,7 @@ Two layers:
 
 | Layer | Location | TTL | Purpose |
 |-------|----------|-----|---------|
-| **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 36 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
+| **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 14 days / 336 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
 | **Pipeline output** | Streamlit memory (`@st.cache_data`) | 1 hour | Avoid re-running heavy backtests; one slot per `(symbol, broker, ...all 5 toggle bools)` |
 
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
@@ -285,9 +286,20 @@ Two layers:
 2. `<repo_root>/data_cache`
 3. System tempdir
 
-This makes the app robust on Streamlit Cloud (where the project dir is writable but ephemeral) and on more locked-down hosts (where only `/tmp` may be writable).
+If none of the candidates are writable, a loud `logger.error` warns that subsequent cache writes will fail — better than a silent miss-then-OSError later. This makes the app robust on Streamlit Cloud (where the project dir is writable but ephemeral) and on more locked-down hosts (where only `/tmp` may be writable).
 
 The disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which is exposed via the Watchlist page). Pipeline output cache clears automatically on app restart or after 1 hour idle.
+
+### Stale-cache fallback contract
+
+`core/data.py:fetch_history` accepts an `allow_stale_fallback: bool = True` parameter that controls how it handles a yfinance failure:
+
+| Caller | `allow_stale_fallback` | yfinance failure behaviour |
+|--------|------------------------|----------------------------|
+| App pages (Dashboard, Forward Outlook, etc.) | `True` (default) | Falls back to the on-disk parquet *even if past TTL*. App keeps working with slightly-stale data instead of dying with a "21 of 21 failed to load" error. Logged as a warning. |
+| `scripts/refresh_cache.py` | `False` | Propagates the exception. `MANIFEST.json` records the symbol as a failure. The nightly GitHub Action then surfaces a real failure instead of silently lying about success. |
+
+This split is what fixed the v1.3.1 "Streamlit Cloud shows 21 symbol(s) failed to load" issue: cloud IPs get rate-limited by yfinance, the app now survives that gracefully, but the refresh script is still strict about what counts as a successful refresh. Regression test: `tests/test_data_fallback.py`.
 
 ---
 
@@ -296,9 +308,12 @@ The disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which 
 | File | Type | What it covers |
 |------|------|----------------|
 | `tests/test_smoke.py` | Synthetic data | Every core module + end-to-end signal decider on fake price series |
-| `tests/test_live.py` | Real yfinance data | MSFT and BHP.AX through the full pipeline |
+| `tests/test_tier1.py` | Synthetic data | Tier-1 helpers (broker links, journal stats, etc.) |
 | `tests/test_tier2.py` | Synthetic data | Settings dataclass, GARCH volatility forecast, regime-stratified trust grade, backtest fold-coverage |
 | `tests/test_tier3.py` | Synthetic data | New toggles round-trip, recency-weight computation (cap/floor/fallback), drawdown breaker (idle/triggered/edge cases) |
+| `tests/test_data_fallback.py` | Mocked yfinance | The stale-cache fallback contract: fresh-cache hit, stale-cache fallback when network fails, `allow_stale_fallback=False` propagation, fixture cleanup ordering |
+| `tests/test_pipeline_smoke.py` | Static + headless pipeline | Two layers: (1) every page in `pages/` is `py_compile`-checked and AST-walked for unresolvable imports; (2) `analyse_one()` is called on MSFT and BHP.AX across every toggle combination, and `analyse_all()` is called on the full watchlist with `enh=all_off()`. Catches schema-drift regressions like the Tier-3 `Enhancements` `TypeError`. |
+| `tests/test_live.py` | Real yfinance data | MSFT and BHP.AX through the full pipeline (optional, network-dependent) |
 
 Run all tests:
 
@@ -307,6 +322,18 @@ Run all tests:
 ```
 
 Smoke tests should always pass. Live tests need internet and may flake if Yahoo throttles or if data feeds change schemas.
+
+### Continuous integration
+
+`.github/workflows/tests.yml` runs the full suite automatically on every push to `main` and every pull request. Three sequential steps:
+
+1. **Quick checks** (~5 sec) — `test_pipeline_smoke.py` filtered to `compiles or imports_resolve`. Catches "I broke a page's syntax" or "I deleted a function and forgot a page imports it" within seconds of pushing.
+2. **Unit + fallback tests** (~30 sec) — every synthetic test plus the stale-cache fallback regression suite.
+3. **Pipeline smoke** (~10 min) — `analyse_one()` × 2 symbols × 8 toggle combos + `analyse_all()` over the full watchlist. The expensive but most-thorough coverage.
+
+The workflow skips runs when only `data_cache/**` or `**/*.md` files changed, so cache-refresh pushes and documentation tweaks don't waste CI minutes. Workflow uses `concurrency: cancel-in-progress` so a force-push doesn't queue stale runs.
+
+You don't have to run these locally — they run automatically. If they go red on `main`, a banner appears at the top of the GitHub repo page.
 
 ---
 
@@ -318,7 +345,8 @@ Most behaviour is parameterised. Common things to tweak:
 |------|-------|
 | Watchlist composition | `core/tickers.py:WATCHLIST` |
 | Default lookback years | `core/data.py:DEFAULT_LOOKBACK_YEARS` |
-| Cache TTL (hours) | `core/data.py:CACHE_TTL_HOURS` (env override: `TRADEON_CACHE_TTL_HOURS`) |
+| Cache TTL (hours) | `core/data.py:CACHE_TTL_HOURS` (default 336h / 14 days, env override: `TRADEON_CACHE_TTL_HOURS`) |
+| Stale-cache fallback toggle | `core.data.fetch_history(allow_stale_fallback=True/False)` — see § 8 |
 | Backtest horizon | `core/backtest.py` (default 90 days) |
 | Default max folds for live watchlist | `app_pipeline.py:analyse_one` (currently 20, prefer-recent) |
 | Default max folds for Backtest Lab | `core/backtest.py` (currently 60, prefer-recent) |
@@ -384,9 +412,9 @@ To eliminate Streamlit Cloud's painful cold-start time (10-25 minutes refetching
 | Refresh script | `scripts/refresh_cache.py` | Re-fetches all watchlist symbols + FX + macro indices, writes to `data_cache/`, drops a `MANIFEST.json` |
 | GitHub Action | `.github/workflows/refresh-cache.yml` | Runs the refresh script weekday mornings (06:30 AEST), commits + pushes the updated parquets |
 | `.gitignore` carve-outs | `.gitignore` | Allows `data_cache/*.parquet` and `data_cache/MANIFEST.json` while still ignoring scratch files |
-| TTL bump | `core/data.py:CACHE_TTL_HOURS` | Default raised from 12h to 36h (override with `$TRADEON_CACHE_TTL_HOURS`) so a missed nightly run doesn't immediately re-trigger live refetches |
+| TTL bump | `core/data.py:CACHE_TTL_HOURS` | Default raised to 14 days / 336h (override with `$TRADEON_CACHE_TTL_HOURS`) so a missed nightly run doesn't immediately re-trigger live refetches. Combined with the stale-cache fallback (see § 8) the app now survives extended periods of yfinance trouble. |
 
-The cache totals ~5 MB. Streamlit Cloud clones it on every deploy, so the Dashboard skips the slow `yfinance.history()` step entirely on a normal cold start. If the bundled cache is missing or stale beyond TTL the app silently falls back to live yfinance fetches — same code path as before, just slower.
+The cache totals ~5 MB. Streamlit Cloud clones it on every deploy, so the Dashboard skips the slow `yfinance.history()` step entirely on a normal cold start. If the bundled cache is missing or stale beyond TTL the app falls back to live yfinance fetches; if those *also* fail (e.g. cloud-IP rate-limit), the app now further falls back to the stale on-disk cache rather than dying — see § 8 "Stale-cache fallback contract".
 
 ---
 

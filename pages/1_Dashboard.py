@@ -118,10 +118,62 @@ wait_n = (df_summary["signal"] == "WAIT").sum()
 avoid_n = (df_summary["signal"] == "AVOID").sum()
 
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("GO signals", int(go_n))
-m2.metric("WAIT", int(wait_n))
-m3.metric("AVOID", int(avoid_n))
-m4.metric("Stocks analysed", len(df_summary))
+m1.metric(
+    "GO signals",
+    int(go_n),
+    help=(
+        "Stocks where every condition lined up: trust grade A or B, regime "
+        "is bull/sideways, an active hold-window matches, forecast lift is "
+        "materially positive, a technical confirms, and no earnings window "
+        "is active. **Most days this is 0** — that's the point."
+    ),
+)
+m2.metric(
+    "WAIT",
+    int(wait_n),
+    help=(
+        "The default state. At least one condition isn't lined up right "
+        "now. The system is staying out. Open the **Forward Outlook** page "
+        "to see only the GOs; come back to the Dashboard for the full picture."
+    ),
+)
+m3.metric(
+    "AVOID",
+    int(avoid_n),
+    help=(
+        "A stronger 'no' than WAIT. The trust grade is poor (D or F) AND "
+        "the regime is bear. The system is explicitly recommending you "
+        "don't trust its forecast on this stock right now."
+    ),
+)
+m4.metric(
+    "Stocks analysed",
+    len(df_summary),
+    help=(
+        f"Out of {len(WATCHLIST)} stocks in the watchlist, this many "
+        "completed the full pipeline successfully. Edit `core/tickers.py` "
+        "to add or remove stocks."
+    ),
+)
+
+with st.expander("How to read this table", expanded=False):
+    st.markdown(
+        """
+**Each card has 5 columns:**
+
+| Column | What you're looking at |
+|---|---|
+| **Symbol + name** | The ticker, sector, and market. ASX names end in `.AX`. |
+| **Trust** | A-F grade for how well our forecasts have matched reality on THIS stock historically, net of fees + tax. The 0-100 score below is the underlying number (A ≥ 80, B 65-79, C 50-64). |
+| **Regime** | Current market mood for this stock: bull / bear / sideways. The pattern number below (0-1) is how seasonally repeatable the stock is — higher = more predictable. |
+| **Signal** | GO / WAIT / AVOID. The % below is the expected 90-day net AUD return. A negative % is a warning, not a typo. |
+| **Headline** | One-line summary of the verdict. The hold-window caption tells you the historically best buy-month / sell-month combo for this stock. |
+
+**Sort tip:** the table is already sorted by signal (GO at top), then by trust score. Look at the GOs first.
+
+**Cross-reference:** click any stock you want to dig into in the **Deep Dive** page — that gives you the full 20-year report behind a row.
+        """
+    )
 
 st.markdown("### Watchlist")
 
@@ -153,6 +205,11 @@ for _, r in display.iterrows():
 
 st.markdown("---")
 st.markdown("### Stats summary")
+st.caption(
+    "Hover over a column header to see what it means. **Ens. Dir. % vs Naive Dir. %** "
+    "is the honesty check — if our ensemble isn't beating the dumb 'tomorrow = today' "
+    "baseline by a clear margin, the trust grade will be C or worse."
+)
 st.dataframe(
     df_summary[
         [
@@ -160,16 +217,81 @@ st.dataframe(
             "ensemble_directional_pct", "naive_directional_pct",
             "trust_grade", "regime", "signal",
         ]
-    ].rename(columns={
-        "spot_aud": "spot (A$)",
-        "cagr_pct": "CAGR %",
-        "vol_pct": "Vol %",
-        "max_dd_pct": "Max DD %",
-        "ensemble_directional_pct": "Ens. Dir. %",
-        "naive_directional_pct": "Naive Dir. %",
-    }),
+    ],
     use_container_width=True,
     hide_index=True,
+    column_config={
+        "symbol": st.column_config.TextColumn("Symbol", help="Ticker. ASX names end in .AX."),
+        "name": st.column_config.TextColumn("Name", help="Plain-English company name."),
+        "spot_aud": st.column_config.NumberColumn(
+            "Spot (A$)",
+            help="Most recent closing price, converted to AUD using historical FX for US stocks.",
+            format="%.2f",
+        ),
+        "cagr_pct": st.column_config.NumberColumn(
+            "CAGR %",
+            help=(
+                "Compound Annual Growth Rate over the 20-year history. "
+                "The constant yearly return that would have got you from "
+                "start to today's price."
+            ),
+            format="%.1f",
+        ),
+        "vol_pct": st.column_config.NumberColumn(
+            "Vol %",
+            help=(
+                "Annualised volatility — how much the price wobbles year to "
+                "year. Higher = bumpier ride. Determines position-size scaling."
+            ),
+            format="%.1f",
+        ),
+        "max_dd_pct": st.column_config.NumberColumn(
+            "Max DD %",
+            help=(
+                "Maximum Drawdown — the worst peak-to-trough fall in the "
+                "20-year history. -50% means it once fell by half before "
+                "recovering."
+            ),
+            format="%.1f",
+        ),
+        "ensemble_directional_pct": st.column_config.NumberColumn(
+            "Ens. Dir. %",
+            help=(
+                "How often the ensemble model (prophet+holt-winters+arima) "
+                "called the up/down direction correctly in walk-forward "
+                "backtest. Above 55% is meaningful; 50% is a coin flip."
+            ),
+            format="%.1f",
+        ),
+        "naive_directional_pct": st.column_config.NumberColumn(
+            "Naive Dir. %",
+            help=(
+                "How often the dumb 'tomorrow = today' baseline got the "
+                "direction right. The ensemble must beat this by a clear "
+                "margin to earn an A or B trust grade."
+            ),
+            format="%.1f",
+        ),
+        "trust_grade": st.column_config.TextColumn(
+            "Trust",
+            help=(
+                "A-F grade based on how reliable our forecasts have been on "
+                "this stock historically, net of fees + tax. C or worse = "
+                "no GO signal will fire here."
+            ),
+        ),
+        "regime": st.column_config.TextColumn(
+            "Regime",
+            help=(
+                "Current market mood for this stock (bull / bear / sideways) "
+                "from a Hidden Markov Model. GO signals are suppressed in bear."
+            ),
+        ),
+        "signal": st.column_config.TextColumn(
+            "Signal",
+            help="GO / WAIT / AVOID — the action column. Default is WAIT.",
+        ),
+    },
 )
 
 render_disclaimer()

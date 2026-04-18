@@ -144,6 +144,63 @@ GLOSSARY: dict[str, str] = {
         "predictions, weighted by which has been most accurate recently. "
         "Usually beats any single model."
     ),
+    "Fold": (
+        "One single 'time-machine' test in a walk-forward backtest. We train "
+        "on data up to some date X, predict the next 90 days, then jump "
+        "forward and grade ourselves against what actually happened. The "
+        "Backtest Lab covers up to 60 such folds (~15 years of quarterly "
+        "tests) so you can see exactly when and how the model has been wrong."
+    ),
+    "Forecast Horizon": (
+        "How far into the future the forecast looks. Default is 90 trading "
+        "days (~4.5 months). Long enough to ride out short-term noise, "
+        "short enough that the patterns from history are still relevant."
+    ),
+    "Trust Score": (
+        "The 0-100 number behind the A-F Trust Grade. Roughly: 80+ = A, "
+        "65-79 = B, 50-64 = C, 35-49 = D, below 35 = F. Useful when you "
+        "want to compare two B-graded stocks - the higher score is more "
+        "reliable."
+    ),
+    "Confidence Interval": (
+        "A range around our forecast that says 'we're 80% sure the actual "
+        "price will land somewhere in here'. A wide band = high uncertainty; "
+        "a narrow band = high conviction. Calibration matters: if our 80% "
+        "band only catches reality 50% of the time, we are overconfident "
+        "and the CI Coverage metric will say so."
+    ),
+    # Enhancement toggles (see Strategy Lab)
+    "GARCH": (
+        "Generalised AutoRegressive Conditional Heteroskedasticity. A "
+        "mouthful. In plain English: a model that forecasts how much the "
+        "next 90 days will SWING (not where they'll go). Used by toggle 1 "
+        "to shrink position sizes when a storm is expected and grow them "
+        "when calm is expected, so each trade carries similar risk."
+    ),
+    "Macro Confirmation": (
+        "Toggle 2 in the Strategy Lab. Before letting any GO signal fire, "
+        "checks the parent index (S&P 500 for US stocks, ASX 200 for ASX) "
+        "and the VIX 'fear index'. If the parent is in a bear regime OR "
+        "VIX is above 30 (panic), the GO is forced down to WAIT. Catches "
+        "the single biggest source of losses for short-term traders: "
+        "getting steamrolled by a hostile overall market."
+    ),
+    "Recency Weighting": (
+        "Toggle 4 in the Strategy Lab. The vanilla forecast ensemble gives "
+        "Prophet, Holt-Winters, and ARIMA an equal 1/3 vote. With recency "
+        "weighting on, each model's vote is sized by its accuracy over the "
+        "last 5 quarterly tests - the model that's been getting it right "
+        "lately gets the loudest voice. A safety cap stops any one model "
+        "from taking more than 70% of the vote."
+    ),
+    "Drawdown Circuit-Breaker": (
+        "Toggle 5 in the Strategy Lab. If a stock has fallen more than 15% "
+        "from its peak in the last 30 trading days, any GO signal is forced "
+        "down to WAIT regardless of what the forecast says. Catches "
+        "'falling knife' situations that statistical models systematically "
+        "under-predict the depth of. Resets automatically when the "
+        "drawdown shallows back to under 15%."
+    ),
 }
 
 
