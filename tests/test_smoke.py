@@ -15,8 +15,11 @@ from core import analysis, costs, forecast, hold_window, regime, signals, techni
 def _synthetic_df(years: int = 6) -> pd.DataFrame:
     """Generate a deterministic price series with trend + seasonality + noise."""
     rng = np.random.default_rng(42)
-    n = years * 252
-    dates = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=n)
+    # Derive n from the actual date count after bdate_range. pandas >= 3.0
+    # can return periods-1 rows depending on whether the end date itself is
+    # a business day, so we always trust len(dates) over the requested N.
+    dates = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=years * 252)
+    n = len(dates)
     t = np.arange(n)
     trend = 50 + t * 0.04
     seasonal = 5 * np.sin(2 * np.pi * t / 252)

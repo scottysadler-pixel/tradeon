@@ -18,8 +18,8 @@ from core.volatility import (
 
 def _synthetic_df(years: int = 8) -> pd.DataFrame:
     rng = np.random.default_rng(42)
-    n = years * 252
-    dates = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=n)
+    dates = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=years * 252)
+    n = len(dates)
     t = np.arange(n)
     trend = 50 + t * 0.04
     noise = rng.normal(0, 1.0, n)
