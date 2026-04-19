@@ -9,7 +9,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
-from app_pipeline import analyse_one, mark_watchlist_warm
+from app_pipeline import DEFAULT_PARALLEL_WORKERS, analyse_one, mark_watchlist_warm
 from core.broker_links import (
     broker_link,
     confirmation_checklist,
@@ -46,17 +46,43 @@ st.markdown(
 if enh.any_active():
     st.info(f"Active enhancements: **{enh.short_label()}** - signals reflect these toggles.")
 
+from app_pipeline import _enh_kwargs  # defensive single source of truth
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
+
 progress = st.progress(0.0, text="Scanning watchlist...")
 candidates: list[dict] = []
-for i, t in enumerate(WATCHLIST):
-    progress.progress((i + 1) / len(WATCHLIST), text=f"Evaluating {t.symbol}...")
+_warnings: list[str] = []
+_n = len(WATCHLIST)
+_completed = [0]
+_progress_lock = Lock()
+_kw = _enh_kwargs(enh)
+
+
+def _eval_one(t):
     try:
-        from app_pipeline import _enh_kwargs  # local import: defensive single source of truth
-        res = analyse_one(t.symbol, broker=broker, **_enh_kwargs(enh))
-        if "error" not in res:
-            candidates.append(res)
+        return t.symbol, analyse_one(t.symbol, broker=broker, **_kw), None
     except Exception as e:  # noqa: BLE001
-        st.warning(f"{t.symbol}: {e}")
+        return t.symbol, None, str(e)
+
+
+with ThreadPoolExecutor(max_workers=min(DEFAULT_PARALLEL_WORKERS, _n)) as _pool:
+    _futs = [_pool.submit(_eval_one, t) for t in WATCHLIST]
+    for _fut in as_completed(_futs):
+        sym, res, err = _fut.result()
+        if err is not None:
+            _warnings.append(f"{sym}: {err}")
+        elif res is not None and "error" not in res:
+            candidates.append(res)
+        with _progress_lock:
+            _completed[0] += 1
+            progress.progress(
+                _completed[0] / _n,
+                text=f"Evaluated {sym} ({_completed[0]}/{_n})",
+            )
+
+for _w in _warnings:
+    st.warning(_w)
 progress.empty()
 mark_watchlist_warm(broker, enh)
 

@@ -153,10 +153,10 @@ Click **Dashboard** in the left navigation.
 
 The first time you do this, the system has work to do — it loads 20 years of data for 21 stocks and runs walk-forward backtests on each.
 
-- **On a normal day:** roughly **30-90 seconds**. The price data is bundled into the repo and refreshed every weekday morning by a GitHub Action, so the slow yfinance download step is already done. Streamlit only has to run the math.
-- **On a "first deploy ever" day or a day the nightly refresh failed:** **10-25 minutes**, because the bundled cache is missing or stale and Streamlit has to refetch every symbol from yfinance. Make a coffee. This should happen rarely.
-
-Subsequent visits within an hour are instant (results are cached in memory).
+- **First-ever load on a fresh deploy:** roughly **3-5 minutes**. The 21 stocks are processed in parallel across 4 worker threads, but the underlying backtest work still has to happen once. Make a coffee.
+- **Cold load after the app went to sleep / new browser session:** **a few seconds**. As of v1.4 there's a disk cache that survives sleeps, so once the app has run analyse-all even once, every subsequent cold load is near-instant.
+- **Subsequent visits within the same session:** instant (results are cached in memory).
+- **If the bundled price cache is missing or stale**, the first load can take 10-25 minutes because Streamlit has to refetch every symbol from yfinance. This should happen rarely — the nightly GitHub Action refreshes the bundled cache every weekday morning.
 
 While you wait, you can navigate to other pages — they don't share the same long-running calculation.
 

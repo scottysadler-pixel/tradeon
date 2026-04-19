@@ -1,16 +1,24 @@
 """Dashboard - watchlist overview with trust grades and signal status.
 
-Heavy computation per stock is cached for an hour so flipping between
-pages is snappy. First load takes a while because we backtest every
-watchlist stock.
+Heavy computation per stock is cached three ways: in-memory (this session),
+on-disk (across sessions, 24h TTL), and parallelized across 4 worker
+threads on a cold load. First load takes ~70 sec on Streamlit Cloud free
+tier, subsequent loads (even after a sleep/wake) are near-instant.
 """
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
+
 import pandas as pd
 import streamlit as st
 
-from app_pipeline import analyse_one, mark_watchlist_warm
+from app_pipeline import (
+    DEFAULT_PARALLEL_WORKERS,
+    analyse_one,
+    mark_watchlist_warm,
+)
 from core.analysis import stock_stats
 from core.settings import from_session as enh_from_session
 from core.tickers import WATCHLIST
@@ -80,20 +88,52 @@ progress = st.progress(0.0, text="Crunching...")
 rows: list[dict] = []
 errors: list[str] = []
 
-for i, t in enumerate(WATCHLIST):
-    progress.progress((i + 1) / len(WATCHLIST), text=f"Analysing {t.symbol}...")
+# Parallelize the per-stock pipeline across worker threads. ARIMA / Prophet /
+# HMM all release the GIL during model fitting, so threading gives a real
+# 3-4x speedup. Results are returned in WATCHLIST order regardless of
+# completion order so the table stays stable across reruns.
+_n = len(WATCHLIST)
+_completed = [0]
+_progress_lock = Lock()
+_enh_label = getattr(enh, "short_label", lambda: "vanilla")()
+_enh_kwargs_dict = dict(
+    enh_garch=bool(getattr(enh, "use_garch", False)),
+    enh_macro=bool(getattr(enh, "use_macro_confirm", False)),
+    enh_regime_grade=bool(getattr(enh, "use_regime_grade", False)),
+    enh_recency_weighted=bool(getattr(enh, "use_recency_weighted", False)),
+    enh_drawdown_breaker=bool(getattr(enh, "use_drawdown_breaker", False)),
+)
+
+
+def _run_one(idx_ticker):
+    i, t = idx_ticker
     try:
-        rows.append(_enrich_with_stats(
-            t.symbol, broker,
-            getattr(enh, "short_label", lambda: "vanilla")(),
-            bool(getattr(enh, "use_garch", False)),
-            bool(getattr(enh, "use_macro_confirm", False)),
-            bool(getattr(enh, "use_regime_grade", False)),
-            bool(getattr(enh, "use_recency_weighted", False)),
-            bool(getattr(enh, "use_drawdown_breaker", False)),
-        ))
-    except Exception as e:  # noqa: BLE001
-        errors.append(f"{t.symbol}: {e}")
+        res = _enrich_with_stats(
+            t.symbol, broker, _enh_label, **_enh_kwargs_dict,
+        )
+        return i, res, None
+    except Exception as ex:  # noqa: BLE001
+        return i, None, f"{t.symbol}: {ex}"
+
+
+_slots: list = [None] * _n
+with ThreadPoolExecutor(max_workers=min(DEFAULT_PARALLEL_WORKERS, _n)) as _pool:
+    _futures = {_pool.submit(_run_one, (i, t)): (i, t) for i, t in enumerate(WATCHLIST)}
+    for _fut in as_completed(_futures):
+        i, res, err = _fut.result()
+        if err:
+            errors.append(err)
+        else:
+            _slots[i] = res
+        with _progress_lock:
+            _completed[0] += 1
+            _, t = _futures[_fut]
+            progress.progress(
+                _completed[0] / _n,
+                text=f"Analysed {t.symbol} ({_completed[0]}/{_n})",
+            )
+
+rows = [r for r in _slots if r is not None]
 progress.empty()
 mark_watchlist_warm(broker, enh)
 

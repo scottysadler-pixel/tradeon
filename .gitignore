@@ -23,6 +23,11 @@ data_cache/*
 !data_cache/*.parquet
 !data_cache/MANIFEST.json
 
+# Pipeline result pickles (disk-persistent layer of the @st.cache_data
+# tier). Each deploy generates its own — they're keyed by CACHE_VERSION,
+# so stale ones across versions are auto-rejected. No need to commit them.
+data_cache/pipeline/
+
 # Stray parquet files anywhere else in the tree are still ignored.
 /*.parquet
 **/scratch_*.parquet

@@ -55,6 +55,7 @@ TRADEON/
 │   ├── macro.py               ← Cross-asset macro snapshot (Tier-2 toggle 2)
 │   ├── regime_grade.py        ← Regime-stratified trust grade (Tier-2 toggle 3)
 │   ├── circuit_breaker.py     ← Drawdown circuit-breaker (Tier-3 toggle 5)
+│   ├── pipeline_cache.py      ← Disk-persistent layer for analyse_one() (24h TTL, schema-versioned)
 │   ├── recommendations.py     ← In-watchlist suggester
 │   └── trade_walkthrough.py   ← Broker-specific "how to actually place this trade"
 ├── app_pipeline.py            ← Centralised analyse_one() — applies toggles, caches per-stock pipeline
@@ -279,7 +280,8 @@ Two layers:
 | Layer | Location | TTL | Purpose |
 |-------|----------|-----|---------|
 | **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 14 days / 336 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
-| **Pipeline output** | Streamlit memory (`@st.cache_data`) | 1 hour | Avoid re-running heavy backtests; one slot per `(symbol, broker, ...all 5 toggle bools)` |
+| **Pipeline output (memory)** | Streamlit memory (`@st.cache_data`) | 1 hour | Within-session: instant subsequent page navigation. Cleared by app restart. |
+| **Pipeline output (disk)** | `data_cache/pipeline/*.pkl` (gitignored, runtime-only) | 24 hours (configurable via `$TRADEON_PIPELINE_CACHE_TTL_HOURS`) | Across-session: cold-load after sleep/wake or new browser session is ~0.2 sec instead of ~4 minutes. Schema-versioned (`CACHE_VERSION`) so a deploy with code changes auto-invalidates the pickles. |
 
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
 1. `$TRADEON_CACHE_DIR` env var if set
@@ -288,7 +290,22 @@ Two layers:
 
 If none of the candidates are writable, a loud `logger.error` warns that subsequent cache writes will fail — better than a silent miss-then-OSError later. This makes the app robust on Streamlit Cloud (where the project dir is writable but ephemeral) and on more locked-down hosts (where only `/tmp` may be writable).
 
-The disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which is exposed via the Watchlist page). Pipeline output cache clears automatically on app restart or after 1 hour idle.
+The price-data disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which is exposed via the Watchlist page). The pipeline-output memory cache clears automatically on app restart or after 1 hour idle. The pipeline-output **disk** cache is wiped by `core/pipeline_cache.py:clear_pipeline_cache()` and auto-invalidates whenever `CACHE_VERSION` is bumped — bump it whenever the shape of `analyse_one()`'s return dict changes (new field, renamed dataclass, etc.).
+
+### Watchlist parallelism
+
+`app_pipeline.analyse_all()` runs the per-stock pipeline across **4 worker threads** by default (override via `max_workers=`). The heavy lifting (statsmodels ARIMA fits, prophet, hmmlearn HMM) all release the GIL during numerical work, so threading delivers a real ~1.8x speedup on a typical multicore box even in pure-Python wrappers. Combined with the disk cache:
+
+| Scenario | Old | New |
+|---|---|---|
+| First-ever cold load (empty disk cache, sequential) | ~440 s | (no longer happens) |
+| Cold load (4 workers, empty disk cache) | n/a | **~240 s** |
+| Cold-after-sleep load (4 workers, disk cache hit) | ~440 s | **~0.2 s** |
+| Within-session navigation (memory cache hit) | instant | instant |
+
+Output ordering is **always WATCHLIST order** regardless of which worker finishes first, so downstream UI rendering stays deterministic across reruns. Per-symbol exceptions are caught and packaged into the result dict (`{"error": "..."}`), so one bad ticker can't kill the whole run.
+
+The Dashboard and Forward Outlook pages each open their own `ThreadPoolExecutor` rather than calling `analyse_all` directly, because they need page-specific result enrichment (e.g. the Dashboard wraps `analyse_one` in `_enrich_with_stats` to add CAGR / drawdown / vol). All three callers (Dashboard, Forward Outlook, `analyse_all`) share the same disk + memory cache layers underneath.
 
 ### Stale-cache fallback contract
 
@@ -312,6 +329,8 @@ This split is what fixed the v1.3.1 "Streamlit Cloud shows 21 symbol(s) failed t
 | `tests/test_tier2.py` | Synthetic data | Settings dataclass, GARCH volatility forecast, regime-stratified trust grade, backtest fold-coverage |
 | `tests/test_tier3.py` | Synthetic data | New toggles round-trip, recency-weight computation (cap/floor/fallback), drawdown breaker (idle/triggered/edge cases) |
 | `tests/test_data_fallback.py` | Mocked yfinance | The stale-cache fallback contract: fresh-cache hit, stale-cache fallback when network fails, `allow_stale_fallback=False` propagation, fixture cleanup ordering |
+| `tests/test_pipeline_cache.py` | Synthetic data | Disk-persistent pipeline cache: save/load round-trip drops volatile fields, stale entries ignored, corrupt pickles auto-deleted, schema version mismatch ignored, different toggle combos and brokers get different cache slots, atomic writes via `.tmp` rename, `clear_pipeline_cache()` |
+| `tests/test_parallel_pipeline.py` | Mocked `analyse_one` | Parallel `analyse_all`: output preserves WATCHLIST order despite out-of-order completion, `max_workers=1` falls back to sequential, per-symbol exceptions don't kill the run, disk-cache hit short-circuits the heavy backtest path |
 | `tests/test_pipeline_smoke.py` | Static + headless pipeline | Two layers: (1) every page in `pages/` is `py_compile`-checked and AST-walked for unresolvable imports; (2) `analyse_one()` is called on MSFT and BHP.AX across every toggle combination, and `analyse_all()` is called on the full watchlist with `enh=all_off()`. Catches schema-drift regressions like the Tier-3 `Enhancements` `TypeError`. |
 | `tests/test_live.py` | Real yfinance data | MSFT and BHP.AX through the full pipeline (optional, network-dependent) |
 
@@ -348,7 +367,10 @@ Most behaviour is parameterised. Common things to tweak:
 | Cache TTL (hours) | `core/data.py:CACHE_TTL_HOURS` (default 336h / 14 days, env override: `TRADEON_CACHE_TTL_HOURS`) |
 | Stale-cache fallback toggle | `core.data.fetch_history(allow_stale_fallback=True/False)` — see § 8 |
 | Backtest horizon | `core/backtest.py` (default 90 days) |
-| Default max folds for live watchlist | `app_pipeline.py:analyse_one` (currently 20, prefer-recent) |
+| Default max folds for live watchlist | `app_pipeline.py:WATCHLIST_MAX_FOLDS` (currently 12, prefer-recent — was 20 before v1.4) |
+| Watchlist parallel worker count | `app_pipeline.py:DEFAULT_PARALLEL_WORKERS` (currently 4) |
+| Pipeline disk cache TTL (hours) | `core/pipeline_cache.py:PIPELINE_CACHE_TTL_HOURS` (default 24h, env override: `TRADEON_PIPELINE_CACHE_TTL_HOURS`) |
+| Pipeline disk cache version (forces invalidation) | `core/pipeline_cache.py:CACHE_VERSION` |
 | Default max folds for Backtest Lab | `core/backtest.py` (currently 60, prefer-recent) |
 | GO signal thresholds | `core/signals.py:decide` |
 | AU CGT rate | `core/costs.py:DEFAULT_MARGINAL_RATE` |
