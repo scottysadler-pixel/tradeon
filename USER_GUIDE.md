@@ -20,6 +20,7 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 6.5. [The Strategy Lab — toggling enhancements](#65-the-strategy-lab--toggling-enhancements)
 6.6. [Recommended toggle starter packs](#66-recommended-toggle-starter-packs)
 6.7. [Reading the diagnostic captions on Forward Outlook](#67-reading-the-diagnostic-captions-on-forward-outlook)
+2.8. [Tablet-first first run: Data Tools workflow](#28-tablet-first-first-run-data-tools-workflow)
 7. [The trust grade in plain English](#7-the-trust-grade-in-plain-english)
 8. [Common questions](#8-common-questions)
 9. [What to do if something looks broken](#9-what-to-do-if-something-looks-broken)
@@ -229,6 +230,23 @@ The panel has three parts:
 - **One to watch** — the most promising currently-active seasonal hold-window that hasn't quite triggered a full GO yet. A "watch this in case other conditions line up" pointer.
 
 If you land on the home page before the Dashboard has run in this session, you'll see a "Compute playbook now" button instead — it triggers the same heavy first-load work the Dashboard does.
+
+## 2.8 Tablet-first first run: Data Tools workflow
+
+If your biggest pain point is page switching on iPad, use this flow once per new session:
+
+1. Open **Data Tools**.
+2. Turn on **Mobile speed profile** if you want lower CPU usage while warming.
+3. Click **Pre-warm raw price cache now**.
+4. Click **Pre-compute watchlist analysis now**.
+5. (Optional) click **Build cache pack** to save a portable, validated zip you can import on another session.
+
+Why this works:
+
+- The first step removes most yfinance reads from later navigation.
+- The second step ensures the watchlist pipeline and per-stock analysis are on disk.
+- Dashboard and Forward Outlook can then render many rows from cache immediately.
+- If you are on a different device later, you can import the cache pack first and then open pages.
 
 ## 3. Reading the Dashboard
 
@@ -605,6 +623,7 @@ A: TRADEON doesn't store any personal data. The only thing that travels is OHLCV
 | A specific stock shows no data | Yahoo may have changed its symbol. Edit `core/tickers.py` to remove or update it. |
 | "**21 of 21 symbols failed to load**" or similar | Yahoo Finance is rate-limiting your cloud host. As of v1.3.1 the app should auto-fall-back to the on-disk cache and keep working with slightly-stale prices (you'll see a `using stale cache` warning in the logs). If it doesn't, the bundled `data_cache/*.parquet` files probably got out of sync with `core/tickers.py` — wait for the next nightly refresh action to run, or trigger it manually from GitHub Actions → "Refresh price cache" → Run workflow. |
 | Dashboard data feels old | Cache TTL is 14 days (intentionally generous so brief outages don't cascade). Click **Refresh all** at the top of the Dashboard to force a re-fetch. Or wait — the GitHub Action refreshes the bundled cache every weekday morning. |
+| iPad / tablet feels unusably slow on navigation | Open **Data Tools** first and run the warm-up steps (raw cache + pre-compute). This keeps Dashboard/Outlook in cache-first mode for subsequent navigation. |
 | Trust grade dropped sharply | Recent market shock — this is the system reacting honestly. Wait a few weeks for it to stabilise. |
 | Cloud app is slow to wake | Free tier sleeps after 7 days idle. First visit takes ~30 sec to wake. |
 | App keeps saying "compute playbook now", restarts every minute, never finishes (the old iPad bug) | Should be impossible as of v1.5 — the file watcher now ignores `data_cache/`. If you see it again, something is rewriting files inside the project directory other than the cache. Check `Engine status → Pipeline cache health` on the home page; if it shows < 21 fresh symbols, hit **Compute playbook now** once and let it finish. |

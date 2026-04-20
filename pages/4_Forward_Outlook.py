@@ -7,9 +7,18 @@ card includes a step-by-step trade walkthrough.
 from __future__ import annotations
 
 import plotly.graph_objects as go
+import json
 import streamlit as st
+import os
+import time
 
-from app_pipeline import DEFAULT_PARALLEL_WORKERS, analyse_one, mark_watchlist_warm
+from app_pipeline import (
+    analyse_one,
+    mark_watchlist_warm,
+    resolve_worker_count,
+    analyse_all_cached_only,
+    is_watchlist_warm,
+)
 from core.broker_links import (
     broker_link,
     confirmation_checklist,
@@ -33,6 +42,33 @@ from ui_helpers import (
 
 page_setup("Forward Outlook")
 
+
+# region agent log
+def _agent_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, object] | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        payload = {
+            "sessionId": "0c742e",
+            "id": f"log_{int(time.time() * 1000)}_0c742e",
+            "timestamp": int(time.time() * 1000),
+            "location": location,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "message": message,
+            "data": data or {},
+        }
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug-0c742e.log"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# endregion
+
 broker = st.session_state.get("broker", "Stake")
 capital = st.session_state.get("capital", 1000.0)
 enh = enh_from_session(st.session_state)
@@ -50,41 +86,69 @@ from app_pipeline import _enh_kwargs  # defensive single source of truth
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 
+_watchlist_warm = is_watchlist_warm(broker, enh)
+_compute_full = _watchlist_warm or st.button(
+    "Compute full forward outlook now",
+    type="primary",
+    help=(
+        "Full pass gives fresh results for every symbol and is the only way to "
+        "generate signals when cache entries are missing."
+    ),
+)
+if not _watchlist_warm:
+    st.info(
+        "Showing cached GO candidates where available. Refresh this page with a "
+        "full pass after cache warm-up for the most complete signal list."
+    )
+
 progress = st.progress(0.0, text="Scanning watchlist...")
 candidates: list[dict] = []
 _warnings: list[str] = []
 _n = len(WATCHLIST)
+_agent_log("H5", "pages/4_Forward_Outlook.py:start", "forward outlook run", {
+    "enh": enh.short_label(),
+    "n": _n,
+})
 _completed = [0]
 _progress_lock = Lock()
 _kw = _enh_kwargs(enh)
 
+if not _compute_full:
+    cached_rows = analyse_all_cached_only(broker=broker, enh=enh)
+    for c in cached_rows:
+        if "error" in c:
+            _warnings.append(f"{c['symbol']}: {c['error']}")
+        elif c.get("signal") == "GO":
+            candidates.append(c)
+    progress.empty()
+else:
+    def _eval_one(t):
+        try:
+            return t.symbol, analyse_one(t.symbol, broker=broker, **_kw), None
+        except Exception as e:  # noqa: BLE001
+            return t.symbol, None, str(e)
 
-def _eval_one(t):
-    try:
-        return t.symbol, analyse_one(t.symbol, broker=broker, **_kw), None
-    except Exception as e:  # noqa: BLE001
-        return t.symbol, None, str(e)
-
-
-with ThreadPoolExecutor(max_workers=min(DEFAULT_PARALLEL_WORKERS, _n)) as _pool:
-    _futs = [_pool.submit(_eval_one, t) for t in WATCHLIST]
-    for _fut in as_completed(_futs):
-        sym, res, err = _fut.result()
-        if err is not None:
-            _warnings.append(f"{sym}: {err}")
-        elif res is not None and "error" not in res:
-            candidates.append(res)
-        with _progress_lock:
-            _completed[0] += 1
-            progress.progress(
-                _completed[0] / _n,
-                text=f"Evaluated {sym} ({_completed[0]}/{_n})",
-            )
+    with ThreadPoolExecutor(
+        max_workers=resolve_worker_count(task_count=_n),
+    ) as _pool:
+        _futs = [_pool.submit(_eval_one, t) for t in WATCHLIST]
+        for _fut in as_completed(_futs):
+            sym, res, err = _fut.result()
+            if err is not None:
+                _warnings.append(f"{sym}: {err}")
+            elif res is not None and "error" not in res:
+                candidates.append(res)
+            with _progress_lock:
+                _completed[0] += 1
+                progress.progress(
+                    _completed[0] / _n,
+                    text=f"Evaluated {sym} ({_completed[0]}/{_n})",
+                )
+    mark_watchlist_warm(broker, enh)
 
 for _w in _warnings:
     st.warning(_w)
 progress.empty()
-mark_watchlist_warm(broker, enh)
 
 go_signals = [c for c in candidates if c["signal"] == "GO"]
 go_signals.sort(key=lambda c: c["signal_obj"].confidence, reverse=True)

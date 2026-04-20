@@ -5,9 +5,14 @@ Run with: streamlit run app.py
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
 import streamlit as st
+import os
+import time
 
 from app_pipeline import analyse_all, is_watchlist_warm, watchlist_cache_status
+from core.pipeline_cache import CACHE_DIR as PIPELINE_CACHE_DIR
 from core.forecast import PROPHET_AVAILABLE
 from core.playbook import build as build_playbook
 from core.settings import from_session as enh_from_session
@@ -15,6 +20,53 @@ from core.tickers import WATCHLIST
 from ui_helpers import broker_picker, capital_input, page_setup, render_disclaimer
 
 page_setup("TRADEON", icon="")
+
+
+# region agent log
+def _agent_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, object] | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        payload = {
+            "sessionId": "0c742e",
+            "id": f"log_{int(time.time() * 1000)}_0c742e",
+            "timestamp": int(time.time() * 1000),
+            "location": location,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "message": message,
+            "data": data or {},
+        }
+        log_path = os.path.join(os.path.dirname(__file__), "debug-0c742e.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# endregion
+
+st.session_state.setdefault("mobile_speed_profile", False)
+st.session_state.setdefault("mobile_speed_workers", 1)
+st.session_state.setdefault("mobile_speed_folds", 8)
+
+
+def _last_pipeline_cache_warm() -> str | None:
+    """Return the most recent pipeline cache write timestamp in UTC."""
+    mtimes = []
+    if not PIPELINE_CACHE_DIR.exists():
+        return None
+    for p in PIPELINE_CACHE_DIR.glob("*.pkl"):
+        try:
+            mtimes.append(p.stat().st_mtime)
+        except Exception:
+            continue
+    if not mtimes:
+        return None
+    return datetime.fromtimestamp(max(mtimes), tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 st.markdown(
     "##### Self-validating stock outlook for an Australian retail trader. "
@@ -38,6 +90,58 @@ with st.sidebar:
         st.caption("Adjust in the Strategy Lab page.")
     else:
         st.caption("No enhancements active. Visit **Strategy Lab** to experiment.")
+
+    st.divider()
+    st.subheader("Mobile speed profile")
+    st.caption(
+        "Useful on iPad/low-power sessions. This caps worker threads and backtest folds "
+        "so first-run compute stays responsive."
+    )
+    _mobile_profile = st.toggle(
+        "Enable mobile speed profile",
+        key="mobile_speed_profile",
+        help=(
+            "When enabled, the app prefers faster startup with reduced compute."
+        ),
+    )
+    st.slider(
+        "Max parallel workers",
+        min_value=1,
+        max_value=4,
+        value=st.session_state["mobile_speed_workers"],
+        key="mobile_speed_workers",
+        disabled=not _mobile_profile,
+    )
+    st.slider(
+        "Max folds per stock",
+        min_value=4,
+        max_value=12,
+        value=st.session_state["mobile_speed_folds"],
+        key="mobile_speed_folds",
+        disabled=not _mobile_profile,
+    )
+
+    st.divider()
+    st.caption("Quick iPad presets")
+    preset_cols = st.columns(3)
+    with preset_cols[0]:
+        if st.button("iPad preset: 1 worker", type="secondary"):
+            st.session_state["mobile_speed_profile"] = True
+            st.session_state["mobile_speed_workers"] = 1
+            st.session_state["mobile_speed_folds"] = 4
+            st.rerun()
+    with preset_cols[1]:
+        if st.button("iPad preset: 2 workers", type="secondary"):
+            st.session_state["mobile_speed_profile"] = True
+            st.session_state["mobile_speed_workers"] = 2
+            st.session_state["mobile_speed_folds"] = 8
+            st.rerun()
+    with preset_cols[2]:
+        if st.button("iPad preset: 4 workers", type="secondary"):
+            st.session_state["mobile_speed_profile"] = True
+            st.session_state["mobile_speed_workers"] = 4
+            st.session_state["mobile_speed_folds"] = 12
+            st.rerun()
 
 # ----- Today's Playbook -----
 st.markdown("### Today's playbook")
@@ -80,14 +184,27 @@ def _render_playbook(rows):
 # both session_state AND the on-disk pipeline cache, so a fresh browser
 # session (e.g. iPad after switching apps) still picks up the cached
 # results in ~0.2 sec instead of showing "Compute now" pointlessly.
+_watchlist_cache_status: dict[str, object] | None = None
 if is_watchlist_warm(broker, enh):
+    # region agent log
+    _agent_log("H4", "app.py:home_warm", "home page using warm cache path", {
+        "broker": broker,
+        "enh": enh.short_label(),
+    })
+    # endregion
     with st.spinner("Loading playbook from cache..."):
         rows = analyse_all(broker=broker, enh=enh)
     _render_playbook(rows)
 else:
-    _status = watchlist_cache_status(broker, enh)
-    _missing = _status["missing"] + _status["stale"]
-    if _missing == _status["total"]:
+    # region agent log
+    _agent_log("H4", "app.py:home_cold", "home page entering cold path", {
+        "broker": broker,
+        "enh": enh.short_label(),
+    })
+    # endregion
+    _watchlist_cache_status = watchlist_cache_status(broker, enh)
+    _missing = _watchlist_cache_status["missing"] + _watchlist_cache_status["stale"]
+    if _missing == _watchlist_cache_status["total"]:
         _msg = (
             "First-ever load: the system needs to compute 20 years of "
             "backtests for each of the 21 watchlist stocks. **Roughly "
@@ -96,11 +213,17 @@ else:
         )
     else:
         _msg = (
-            f"{_missing} of {_status['total']} stocks need refreshing "
-            f"({_status['fresh']} already cached). Should take a minute or two."
+            f"{_missing} of {_watchlist_cache_status['total']} stocks need refreshing "
+            f"({_watchlist_cache_status['fresh']} already cached). Should take a minute or two."
         )
     st.info(_msg)
     if st.button("Compute playbook now", type="primary"):
+        # region agent log
+        _agent_log("H4", "app.py:compute_pressed", "user requested full playbook compute", {
+            "broker": broker,
+            "enh": enh.short_label(),
+        })
+        # endregion
         prog = st.progress(0.0, text="Crunching watchlist...")
         analyse_all(broker=broker, progress=prog, enh=enh)
         prog.empty()
@@ -151,6 +274,16 @@ with st.expander("Engine status"):
     st.write(f"**Python:** {sys.version.split()[0]}")
     st.write(f"**Prophet available:** {'Yes' if PROPHET_AVAILABLE else 'No (fallback to Holt-Winters + ARIMA)'}")
     st.write(f"**Watchlist size:** {len(WATCHLIST)} stocks")
+    _last_warm = _last_pipeline_cache_warm()
+    st.write(
+        f"**Last cache warm timestamp:** "
+        f"{_last_warm if _last_warm is not None else 'No warm cache on disk yet'}"
+    )
+    if st.session_state.get("mobile_speed_profile"):
+        st.write(
+            f"**Mobile speed profile:** ON (workers={st.session_state.get('mobile_speed_workers')}, "
+            f"folds={st.session_state.get('mobile_speed_folds')})"
+        )
     if not PROPHET_AVAILABLE:
         st.caption(
             "Prophet isn't installed in this environment, so the ensemble runs on "
@@ -163,7 +296,9 @@ with st.expander("Engine status"):
 
     st.markdown("---")
     st.markdown("**Pipeline cache health**")
-    _cs = watchlist_cache_status(broker, enh)
+    if _watchlist_cache_status is None:
+        _watchlist_cache_status = watchlist_cache_status(broker, enh)
+    _cs = _watchlist_cache_status
     _emoji = "OK" if _cs["fresh"] == _cs["total"] else "WARM" if _cs["fresh"] > 0 else "COLD"
     st.write(
         f"`{_emoji}`  **{_cs['fresh']}/{_cs['total']}** stocks fresh on disk  "

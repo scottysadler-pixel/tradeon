@@ -38,6 +38,7 @@ import hashlib
 import logging
 import os
 import pickle
+import json
 import tempfile
 import threading
 import time
@@ -110,6 +111,34 @@ def _resolve_pipeline_cache_dir() -> Path:
 CACHE_DIR = _resolve_pipeline_cache_dir()
 
 
+# region agent log
+def _agent_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, Any] | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        payload = {
+            "sessionId": "0c742e",
+            "id": f"log_{int(time.time() * 1000)}_0c742e",
+            "timestamp": int(time.time() * 1000),
+            "location": location,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "message": message,
+            "data": data or {},
+        }
+        log_path = Path(__file__).resolve().parent.parent / "debug-0c742e.log"
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# endregion
+
+
 def _key_to_filename(symbol: str, broker: str, toggles: dict[str, bool]) -> str:
     """Stable filename for a (symbol, broker, toggle-combo) tuple.
 
@@ -155,7 +184,19 @@ def load_cached(
     fast). This keeps pickle sizes small and prices always fresh.
     """
     path = CACHE_DIR / _key_to_filename(symbol, broker, toggles)
+    # region agent log
+    _agent_log("H1", "core/pipeline_cache.py:load_cached", "pipeline cache lookup", {
+        "symbol": symbol,
+        "broker": broker,
+        "path": str(path),
+    })
+    # endregion
     if not _is_fresh(path, ttl_hours=ttl_hours):
+        # region agent log
+        _agent_log("H1", "core/pipeline_cache.py:cache_stale_or_missing", "pipeline cache stale/missing", {
+            "symbol": symbol,
+        })
+        # endregion
         return None
     try:
         with path.open("rb") as f:
@@ -169,6 +210,12 @@ def load_cached(
             path.unlink(missing_ok=True)
         except Exception:  # noqa: BLE001
             pass
+        # region agent log
+        _agent_log("H1", "core/pipeline_cache.py:cache_read_error", "pipeline cache read failed", {
+            "symbol": symbol,
+            "error": str(e),
+        })
+        # endregion
         return None
 
     if not isinstance(payload, dict) or payload.get("_cache_version") != CACHE_VERSION:
@@ -177,11 +224,28 @@ def load_cached(
             symbol, payload.get("_cache_version") if isinstance(payload, dict) else None,
             CACHE_VERSION,
         )
+        # region agent log
+        _agent_log("H1", "core/pipeline_cache.py:cache_version_mismatch", "pipeline cache version mismatch", {
+            "symbol": symbol,
+            "saved": payload.get("_cache_version") if isinstance(payload, dict) else None,
+            "current": CACHE_VERSION,
+        })
+        # endregion
         return None
 
     result = payload.get("result")
     if not isinstance(result, dict):
+        # region agent log
+        _agent_log("H1", "core/pipeline_cache.py:cache_invalid_payload", "pipeline cache payload invalid", {
+            "symbol": symbol,
+        })
+        # endregion
         return None
+    # region agent log
+    _agent_log("H1", "core/pipeline_cache.py:cache_hit", "pipeline cache hit", {
+        "symbol": symbol,
+    })
+    # endregion
     return result
 
 
@@ -224,8 +288,18 @@ def save_cached(
     on the persisted file straight after the call returns.
     """
     if not isinstance(result, dict):
+        # region agent log
+        _agent_log("H3", "core/pipeline_cache.py:save_skip", "pipeline save skipped - bad payload", {
+            "symbol": symbol,
+        })
+        # endregion
         return
     if "error" in result:
+        # region agent log
+        _agent_log("H3", "core/pipeline_cache.py:save_skip_error", "pipeline save skipped - error result", {
+            "symbol": symbol,
+        })
+        # endregion
         return
     # Shallow copy so we don't mutate the caller's dict.
     persisted = {k: v for k, v in result.items() if k not in _VOLATILE_FIELDS}
@@ -235,6 +309,12 @@ def save_cached(
         "result": persisted,
     }
     path = CACHE_DIR / _key_to_filename(symbol, broker, toggles)
+    # region agent log
+    _agent_log("H3", "core/pipeline_cache.py:save_request", "pipeline save requested", {
+        "symbol": symbol,
+        "sync": sync,
+    })
+    # endregion
     if sync:
         _do_save(symbol, path, payload)
         return

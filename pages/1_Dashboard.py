@@ -15,9 +15,11 @@ import pandas as pd
 import streamlit as st
 
 from app_pipeline import (
-    DEFAULT_PARALLEL_WORKERS,
     analyse_one,
+    resolve_worker_count,
     mark_watchlist_warm,
+    analyse_all_cached_only,
+    is_watchlist_warm,
 )
 from core.analysis import stock_stats
 from core.settings import from_session as enh_from_session
@@ -67,11 +69,40 @@ def _enrich_with_stats(
     }
 
 
+def _enrich_cached_row(row: dict) -> dict:
+    """Fill descriptive stats for a cached row without recomputing pipeline."""
+    if "error" in row or "df" not in row:
+        return row
+    stats = stock_stats(row["df"])
+    return {
+        **{k: v for k, v in row.items() if k != "df" and not k.endswith("_obj")},
+        "pattern_strength": stats.pattern_strength,
+        "cagr_pct": stats.cagr_pct,
+        "vol_pct": stats.annualised_vol_pct,
+        "max_dd_pct": stats.max_drawdown_pct,
+    }
+
+
 st.markdown(
     "Watchlist overview. **Default state is WAIT** - GO signals only appear when "
     "multiple indicators agree. Most days you'll see mostly grey. That's the system "
     "working correctly."
 )
+
+_watchlist_warm = is_watchlist_warm(broker, enh)
+_compute_full = _watchlist_warm or st.button(
+    "Compute full watchlist now",
+    type="primary",
+    help=(
+        "Run full analysis for all 21 stocks (accurate fresh results, can take "
+        "up to a few minutes on first pass)."
+    ),
+)
+if not _watchlist_warm:
+    st.info(
+        "Showing cached rows where available. Missing symbols will appear as errors "
+        "until you compute a full pass."
+    )
 
 col_run, col_refresh = st.columns([3, 1])
 with col_run:
@@ -84,17 +115,15 @@ with col_refresh:
         st.cache_data.clear()
         st.rerun()
 
-progress = st.progress(0.0, text="Crunching...")
 rows: list[dict] = []
 errors: list[str] = []
+progress = st.progress(0.0, text="Crunching...")
 
 # Parallelize the per-stock pipeline across worker threads. ARIMA / Prophet /
 # HMM all release the GIL during model fitting, so threading gives a real
 # 3-4x speedup. Results are returned in WATCHLIST order regardless of
 # completion order so the table stays stable across reruns.
 _n = len(WATCHLIST)
-_completed = [0]
-_progress_lock = Lock()
 _enh_label = getattr(enh, "short_label", lambda: "vanilla")()
 _enh_kwargs_dict = dict(
     enh_garch=bool(getattr(enh, "use_garch", False)),
@@ -104,38 +133,49 @@ _enh_kwargs_dict = dict(
     enh_drawdown_breaker=bool(getattr(enh, "use_drawdown_breaker", False)),
 )
 
-
-def _run_one(idx_ticker):
-    i, t = idx_ticker
-    try:
-        res = _enrich_with_stats(
-            t.symbol, broker, _enh_label, **_enh_kwargs_dict,
-        )
-        return i, res, None
-    except Exception as ex:  # noqa: BLE001
-        return i, None, f"{t.symbol}: {ex}"
-
-
-_slots: list = [None] * _n
-with ThreadPoolExecutor(max_workers=min(DEFAULT_PARALLEL_WORKERS, _n)) as _pool:
-    _futures = {_pool.submit(_run_one, (i, t)): (i, t) for i, t in enumerate(WATCHLIST)}
-    for _fut in as_completed(_futures):
-        i, res, err = _fut.result()
-        if err:
-            errors.append(err)
+if not _compute_full:
+    cached_rows = analyse_all_cached_only(broker=broker, enh=enh)
+    for r in cached_rows:
+        if "error" in r:
+            errors.append(f"{r['symbol']}: {r['error']}")
+            rows.append(r)
         else:
-            _slots[i] = res
-        with _progress_lock:
-            _completed[0] += 1
-            _, t = _futures[_fut]
-            progress.progress(
-                _completed[0] / _n,
-                text=f"Analysed {t.symbol} ({_completed[0]}/{_n})",
+            rows.append(_enrich_cached_row(r))
+    progress.empty()
+else:
+    def _run_one(idx_ticker):
+        i, t = idx_ticker
+        try:
+            res = _enrich_with_stats(
+                t.symbol, broker, _enh_label, **_enh_kwargs_dict,
             )
+            return i, res, None
+        except Exception as ex:  # noqa: BLE001
+            return i, None, f"{t.symbol}: {ex}"
 
-rows = [r for r in _slots if r is not None]
-progress.empty()
-mark_watchlist_warm(broker, enh)
+    _slots: list = [None] * _n
+    _completed = [0]
+    _progress_lock = Lock()
+    _pool_workers = resolve_worker_count(task_count=_n)
+    with ThreadPoolExecutor(max_workers=_pool_workers) as _pool:
+        _futures = {_pool.submit(_run_one, (i, t)): (i, t) for i, t in enumerate(WATCHLIST)}
+        for _fut in as_completed(_futures):
+            i, res, err = _fut.result()
+            if err:
+                errors.append(err)
+            else:
+                _slots[i] = res
+            with _progress_lock:
+                _completed[0] += 1
+                _, t = _futures[_fut]
+                progress.progress(
+                    _completed[0] / _n,
+                    text=f"Analysed {t.symbol} ({_completed[0]}/{_n})",
+                )
+
+    rows = [r for r in _slots if r is not None]
+    progress.empty()
+    mark_watchlist_warm(broker, enh)
 
 if enh.any_active():
     st.info(f"Active enhancements: **{enh.short_label()}** - results below reflect these toggles. Adjust in Strategy Lab.")

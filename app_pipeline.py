@@ -19,6 +19,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from threading import Lock
 from typing import Any
+import json
+import os
+import time
 
 import streamlit as st
 
@@ -43,14 +46,145 @@ from core.volatility import VolatilityForecast, forecast_vol
 
 # How many walk-forward folds the watchlist trust grade uses.
 # 12 folds ≈ 3 years of quarterly tests — enough for a meaningful trust
-# grade, ~40% faster than the previous 20. The Backtest Lab can override
-# this for deeper analysis (its own UI exposes the cap).
-WATCHLIST_MAX_FOLDS = 12
+# grade, ~40% faster than the previous 20. You can tune this at runtime:
+#
+#   TRADEON_WATCHLIST_MAX_FOLDS=8
+#
+# lower = faster and "less deep"; higher = slightly better stability at
+# more CPU time. Keep 12 or above for production-style decisions.
+try:
+    WATCHLIST_MAX_FOLDS = max(1, int(os.environ.get("TRADEON_WATCHLIST_MAX_FOLDS", "12")))
+except ValueError:
+    WATCHLIST_MAX_FOLDS = 12
 
 # Default number of parallel workers for analyse_all(). 4 is a comfortable
-# fit on Streamlit Cloud's 1 GB free tier (4 × ~150 MB peak). Override via
-# the parameter if running on more powerful hardware.
+# fit on Streamlit Cloud's 1 GB free tier (4 × ~150 MB peak). You can
+# override this from the environment at runtime:
+#
+#   TRADEON_MAX_WORKERS=6
+#
+# or by passing `max_workers` to analyse_all().
 DEFAULT_PARALLEL_WORKERS = 4
+
+
+def resolve_worker_count(
+    requested: int | None = None,
+    *,
+    task_count: int | None = None,
+) -> int:
+    """Resolve worker count for thread pools.
+
+    Priority:
+      1. Explicit function argument.
+      2. TRADEON_MAX_WORKERS env var.
+      3. DEFAULT_PARALLEL_WORKERS constant.
+
+    Results are clamped to at least 1 and at most `task_count` when
+    supplied, so callers can reuse this for any loop size.
+    """
+    env = os.environ.get("TRADEON_MAX_WORKERS")
+    resolved = DEFAULT_PARALLEL_WORKERS
+
+    if requested is not None:
+        resolved = requested
+    elif env is not None:
+        try:
+            resolved = int(env)
+        except ValueError:
+            _agent_log(
+                "H1",
+                "app_pipeline.py:resolve_worker_count_invalid_env",
+                "invalid TRADEON_MAX_WORKERS value, using default",
+                {"value": env},
+            )
+            resolved = DEFAULT_PARALLEL_WORKERS
+
+    try:
+        workers = int(resolved)
+    except (TypeError, ValueError):
+        workers = DEFAULT_PARALLEL_WORKERS
+
+    if workers < 1:
+        workers = 1
+
+    # Respect CPU-limited hosts: don't spin up unrealistic thread counts
+    # if someone passes a very large number.
+    cpu_cap = os.cpu_count() or workers
+    workers = min(workers, cpu_cap)
+
+    if task_count is not None:
+        workers = max(1, min(workers, task_count))
+
+    mobile_profile = False
+    mobile_cap = None
+    try:
+        mobile_profile = bool(st.session_state.get("mobile_speed_profile", False))
+        mobile_cap_raw = st.session_state.get("mobile_speed_workers")
+        if mobile_cap_raw is not None:
+            mobile_cap = int(mobile_cap_raw)
+    except Exception:
+        mobile_profile = False
+        mobile_cap = None
+    if mobile_cap is not None and mobile_cap < 1:
+        mobile_cap = 1
+    if mobile_profile:
+        env_mobile = os.environ.get("TRADEON_MOBILE_MAX_WORKERS")
+        try:
+            mobile_default = int(env_mobile) if env_mobile is not None else 1
+        except ValueError:
+            mobile_default = 1
+        if mobile_default < 1:
+            mobile_default = 1
+        cap = mobile_cap if mobile_cap is not None else mobile_default
+        workers = min(workers, cap)
+
+    return workers
+
+
+def resolve_watchlist_folds(default_folds: int = WATCHLIST_MAX_FOLDS) -> int:
+    """Return a possibly reduced fold budget when mobile speed mode is enabled."""
+    folds = max(1, int(default_folds))
+    try:
+        mobile_profile = bool(st.session_state.get("mobile_speed_profile", False))
+    except Exception:
+        mobile_profile = False
+    if not mobile_profile:
+        return folds
+
+    try:
+        mobile_cap = int(st.session_state.get("mobile_speed_folds", folds))
+    except Exception:
+        mobile_cap = folds
+    mobile_cap = max(1, int(mobile_cap))
+    return min(folds, mobile_cap)
+
+
+# region agent log
+def _agent_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, Any] | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        payload = {
+            "sessionId": "0c742e",
+            "id": f"log_{int(time.time() * 1000)}_0c742e",
+            "timestamp": int(time.time() * 1000),
+            "location": location,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "message": message,
+            "data": data or {},
+        }
+        log_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "debug-0c742e.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# endregion
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -88,28 +222,38 @@ def analyse_one(
 
     t = next(x for x in WATCHLIST if x.symbol == symbol)
 
-    # Tier 2: disk cache. Strips df to keep pickles small; we re-attach it
-    # below from the parquet cache (which is itself ~40ms cheap).
-    toggle_kwargs = {
-        "enh_garch": enh_garch,
-        "enh_macro": enh_macro,
-        "enh_regime_grade": enh_regime_grade,
-        "enh_recency_weighted": enh_recency_weighted,
-        "enh_drawdown_breaker": enh_drawdown_breaker,
-    }
-    cached = load_cached(symbol, broker, toggle_kwargs)
+    # region agent log
+    _agent_log("H1", "app_pipeline.py:cache_lookup", "analyse_one invoked", {
+        "symbol": symbol, "broker": broker,
+        "toggles": {
+            "enh_garch": enh_garch,
+            "enh_macro": enh_macro,
+            "enh_regime_grade": enh_regime_grade,
+            "enh_recency_weighted": enh_recency_weighted,
+            "enh_drawdown_breaker": enh_drawdown_breaker,
+        },
+    })
+    # endregion
+    cached = _cached_analysis_payload(symbol, broker, enh)
     if cached is not None:
-        try:
-            df_native = fetch_history(symbol, years=20, adjusted=True)
-            df = normalise_to_aud(df_native, t)
-            cached["df"] = df
-            cached["enhancements"] = enh
-            return cached
-        except Exception:  # noqa: BLE001
-            # Re-fetch failed for some reason — fall through to full recompute.
-            pass
+        # region agent log
+        _agent_log("H1", "app_pipeline.py:cache_hit", "analyse_one cache hit", {
+            "symbol": symbol,
+            "returned_fields": sorted(list(cached.keys())),
+        })
+        # endregion
+        return cached
+    # region agent log
+    _agent_log("H2", "app_pipeline.py:cache_hit_but_df_fail", "cached result rejected or missing; recompute", {
+        "symbol": symbol,
+    })
+    # endregion
 
     # Tier 3: full recompute.
+    start_t = time.time()
+    _agent_log("H3", "app_pipeline.py:recompute_start", "analyse_one recompute start", {
+        "symbol": symbol,
+    })
     df_native = fetch_history(symbol, years=20, adjusted=True)
     df = normalise_to_aud(df_native, t)
 
@@ -127,7 +271,7 @@ def analyse_one(
     # watchlist. The Backtest Lab can override max_folds for deeper history.
     bt = backtest_all(
         df, horizon_days=90, market=t.market,
-        broker=broker, max_folds=WATCHLIST_MAX_FOLDS,
+        broker=broker, max_folds=resolve_watchlist_folds(WATCHLIST_MAX_FOLDS),
     )
     rg = detect_regime(df)
 
@@ -241,6 +385,12 @@ def analyse_one(
         save_cached(symbol, broker, toggle_kwargs, result)
     except Exception:  # noqa: BLE001
         pass
+    # region agent log
+    _agent_log("H3", "app_pipeline.py:recompute_end", "analyse_one recompute finished", {
+        "symbol": symbol,
+        "duration_ms": int((time.time() - start_t) * 1000),
+    })
+    # endregion
 
     return result
 
@@ -284,6 +434,10 @@ def is_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) ->
     # Note: Streamlit forbids session_state keys that start with underscore,
     # so the key uses a leading word.
     if st.session_state.get(f"pipeline_warm__{broker}__{e.short_label()}", False):
+        _agent_log("H4", "app_pipeline.py:watchlist_warm_session", "session warm cache flag set", {
+            "broker": broker,
+            "enh_label": e.short_label(),
+        })
         return True
     # Fall back to on-disk inspection. Cheap (just stat() + mtime per file).
     try:
@@ -296,9 +450,23 @@ def is_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) ->
         }
         symbols = [t.symbol for t in WATCHLIST]
         status = cache_status(symbols, broker, toggle_kwargs)
+        # region agent log
+        _agent_log("H4", "app_pipeline.py:watchlist_warm_disk", "watchlist cache status check", {
+            "broker": broker,
+            "fresh": status.get("fresh"),
+            "missing": status.get("missing"),
+            "stale": status.get("stale"),
+            "total": status.get("total"),
+        })
+        # endregion
         return status["fresh"] == status["total"] and status["total"] > 0
     except Exception:  # noqa: BLE001
         # Disk inspection should never block UI rendering. Fall back to "cold".
+        # region agent log
+        _agent_log("H4", "app_pipeline.py:watchlist_warm_error", "watchlist cache status failed", {
+            "broker": broker,
+        })
+        # endregion
         return False
 
 
@@ -322,6 +490,95 @@ def watchlist_cache_status(
     return cache_status(symbols, broker, toggle_kwargs)
 
 
+def _cached_analysis_payload(
+    symbol: str,
+    broker: str,
+    e: Enhancements,
+) -> dict[str, Any] | None:
+    """Load a warm pipeline cache entry and re-attach the current df.
+
+    This is the fast path for any cache-only flow. Returns None when no fresh
+    cache exists or when df re-attach fails.
+    """
+    toggle_kwargs = {
+        "enh_garch": bool(getattr(e, "use_garch", False)),
+        "enh_macro": bool(getattr(e, "use_macro_confirm", False)),
+        "enh_regime_grade": bool(getattr(e, "use_regime_grade", False)),
+        "enh_recency_weighted": bool(getattr(e, "use_recency_weighted", False)),
+        "enh_drawdown_breaker": bool(getattr(e, "use_drawdown_breaker", False)),
+    }
+    cached = load_cached(symbol, broker, toggle_kwargs)
+    if cached is None:
+        return None
+    t = next(x for x in WATCHLIST if x.symbol == symbol)
+    try:
+        df_native = fetch_history(symbol, years=20, adjusted=True)
+        df = normalise_to_aud(df_native, t)
+    except Exception:
+        return None
+    payload = dict(cached)
+    payload["df"] = df
+    payload["enhancements"] = e
+    return payload
+
+
+def analyse_one_cached_only(
+    symbol: str,
+    broker: str = "Stake",
+    enh_label: str = "vanilla",
+    enh_garch: bool = False,
+    enh_macro: bool = False,
+    enh_regime_grade: bool = False,
+    enh_recency_weighted: bool = False,
+    enh_drawdown_breaker: bool = False,
+) -> dict[str, Any]:
+    """Return only a cached analysis for one stock.
+
+    This avoids recomputation entirely. If the warm cache entry is missing or
+    cannot be materialised, the returned dict has an `error` field.
+    """
+    e = Enhancements(
+        use_garch=enh_garch,
+        use_macro_confirm=enh_macro,
+        use_regime_grade=enh_regime_grade,
+        use_recency_weighted=enh_recency_weighted,
+        use_drawdown_breaker=enh_drawdown_breaker,
+        label=enh_label,
+    )
+    t = next(x for x in WATCHLIST if x.symbol == symbol)
+    cached = _cached_analysis_payload(symbol, broker, e)
+    if cached is not None:
+        return cached
+    return {
+        "symbol": symbol,
+        "name": t.name,
+        "market": t.market,
+        "ticker": t,
+        "error": "No warm cache entry available yet. Click Compute now.",
+    }
+
+
+def analyse_all_cached_only(
+    broker: str = "Stake",
+    enh: Enhancements | None = None,
+) -> list[dict[str, Any]]:
+    """Fast startup path: return watchlist results from disk cache only.
+
+    No backtesting/forecasting kernels are re-run. Missing cache entries return
+    an `error` row but the list still stays complete and ordered.
+    """
+    e = enh or all_off()
+    kw = _enh_kwargs(e)
+    rows: list[dict[str, Any]] = []
+    for t in WATCHLIST:
+        rows.append(analyse_one_cached_only(
+            t.symbol,
+            broker=broker,
+            **kw,
+        ))
+    return rows
+
+
 def mark_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) -> None:
     e = enh or all_off()
     try:
@@ -336,7 +593,7 @@ def analyse_all(
     progress: st.delta_generator.DeltaGenerator | None = None,
     enh: Enhancements | None = None,
     *,
-    max_workers: int = DEFAULT_PARALLEL_WORKERS,
+    max_workers: int | None = None,
 ) -> list[dict[str, Any]]:
     """Run analyse_one for every watchlist symbol, returning results.
 
@@ -350,6 +607,12 @@ def analyse_all(
     so downstream UI rendering stays deterministic across reloads.
     """
     e = enh or all_off()
+    # If we only need cached data, preserve deterministic, instant startup
+    # behaviour and avoid expensive recompute while still returning stable order.
+    #
+    # This helper is intentionally tiny and used by UI paths that allow users
+    # to inspect cached data while they wait for a background rebuild.
+    #
     kw = _enh_kwargs(e)
 
     # Pre-allocate so we can fill positions out-of-order without affecting
@@ -370,17 +633,25 @@ def analyse_all(
             }
 
     n = len(WATCHLIST)
-    workers = max(1, min(max_workers, n))
+    workers = resolve_worker_count(max_workers, task_count=n)
 
     if workers == 1:
         # Sequential fallback — preserves the old behaviour for tests / debug.
         for i, t in enumerate(WATCHLIST):
+            _agent_log("H3", "app_pipeline.py:analyse_all_worker_start", "analyse_all sequential start", {
+                "symbol": t.symbol, "worker": "seq",
+            })
             if progress is not None:
                 progress.progress((i + 1) / n, text=f"Analysing {t.symbol}...")
             _, res = _run((i, t))
             rows[i] = res
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
+            _agent_log("H3", "app_pipeline.py:analyse_all_parallel_start", "analyse_all parallel start", {
+                "workers": workers,
+                "broker": broker,
+                "enh_label": e.short_label(),
+            })
             futures = {
                 pool.submit(_run, (i, t)): (i, t)
                 for i, t in enumerate(WATCHLIST)
@@ -388,6 +659,10 @@ def analyse_all(
             for fut in as_completed(futures):
                 i, res = fut.result()
                 rows[i] = res
+                _agent_log("H3", "app_pipeline.py:analyse_all_parallel_complete", "analyse_all symbol done", {
+                    "symbol": res.get("symbol", "?"),
+                    "has_error": "error" in res,
+                })
                 if progress is not None:
                     with progress_lock:
                         completed[0] += 1

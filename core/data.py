@@ -13,6 +13,9 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import json
+import time
+from functools import lru_cache
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -61,6 +64,34 @@ def _resolve_cache_dir() -> Path:
 
 CACHE_DIR = _resolve_cache_dir()
 
+
+# region agent log
+def _agent_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, object] | None = None,
+    *,
+    run_id: str = "pre-fix",
+) -> None:
+    try:
+        payload = {
+            "sessionId": "0c742e",
+            "id": f"log_{int(time.time() * 1000)}_0c742e",
+            "timestamp": int(time.time() * 1000),
+            "location": location,
+            "runId": run_id,
+            "hypothesisId": hypothesis_id,
+            "message": message,
+            "data": data or {},
+        }
+        log_path = Path(__file__).resolve().parent.parent / "debug-0c742e.log"
+        with log_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception:
+        pass
+# endregion
+
 # Pull this many years of history by default.
 DEFAULT_LOOKBACK_YEARS = 20
 
@@ -96,10 +127,26 @@ def _read_cached_parquet(path: Path) -> pd.DataFrame | None:
     if not path.exists():
         return None
     try:
-        return pd.read_parquet(path)
+        return _read_parquet_cached(str(path), path.stat().st_mtime_ns).copy()
     except Exception as e:  # noqa: BLE001
         logger.warning("Cache read failed for %s: %s", path.name, e)
+        # region agent log
+        _agent_log("H2", "core/data.py:read_cache_error", "cached parquet read failed", {
+            "path": path.name,
+            "error": str(e),
+        })
+        # endregion
         return None
+
+
+@lru_cache(maxsize=24)
+def _read_parquet_cached(path: str, mtime_epoch: int) -> pd.DataFrame:
+    """Read parquet with an in-process cache.
+
+    The `mtime_epoch` salt means that when a file is refreshed (even within
+    the same process), the cached dataframe is invalidated automatically.
+    """
+    return pd.read_parquet(path)
 
 
 def _fetch_from_yfinance(symbol: str, *, years: int, adjusted: bool) -> pd.DataFrame:
@@ -171,11 +218,26 @@ def fetch_history(
                     MANIFEST.json by reporting success.
     """
     path = _cache_path(symbol, adjusted)
+    # region agent log
+    _agent_log("H2", "core/data.py:fetch_start", "fetch_history called", {
+        "symbol": symbol,
+        "years": years,
+        "adjusted": adjusted,
+        "force_refresh": force_refresh,
+        "allow_stale_fallback": allow_stale_fallback,
+    })
+    # endregion
 
     # Step 1: fresh cache - fast path.
     if not force_refresh and _is_fresh(path):
         cached = _read_cached_parquet(path)
         if cached is not None:
+            # region agent log
+            _agent_log("H2", "core/data.py:cache_fresh_hit", "returning fresh parquet cache", {
+                "symbol": symbol,
+                "rows": len(cached),
+            })
+            # endregion
             return cached
         # Fall through to refetch on read failure.
 
@@ -193,6 +255,12 @@ def fetch_history(
         # Step 3: stale-cache fallback.
         cached = _read_cached_parquet(path)
         if cached is not None:
+            # region agent log
+            _agent_log("H2", "core/data.py:stale_fallback", "using stale cache after fetch failure", {
+                "symbol": symbol,
+                "error": str(net_err),
+            })
+            # endregion
             logger.warning(
                 "yfinance failed for %s (%s); falling back to cached data "
                 "(may be slightly stale).",
@@ -200,6 +268,12 @@ def fetch_history(
             )
             return cached
         # Step 4: nothing to fall back to - bubble up the original error.
+        # region agent log
+        _agent_log("H2", "core/data.py:fetch_fail_no_fallback", "history fetch failed no fallback", {
+            "symbol": symbol,
+            "error": str(net_err),
+        })
+        # endregion
         raise
 
 

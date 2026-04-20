@@ -25,13 +25,16 @@ TRADEON/
 ├── app.py                     ← Streamlit landing page
 ├── ui_helpers.py              ← Shared UI widgets, badges, formatters
 ├── pages/                     ← Multi-page Streamlit UI
+│   ├── 0_Data_Tools.py         ← Pre-warm cache + cache-pack actions
 │   ├── 1_Dashboard.py         ← Watchlist overview + trust grades
 │   ├── 2_Deep_Dive.py         ← Single-stock 20-year analysis
 │   ├── 3_Backtest_Lab.py      ← Interactive prediction-vs-actual playground
 │   ├── 4_Forward_Outlook.py   ← Live GO signals only
 │   ├── 5_Watchlist.py         ← Watchlist + recommender + cache management
 │   ├── 6_Learn.py             ← Plain-English education
-│   └── 7_Help.py              ← In-app version of USER_GUIDE.md
+│   ├── 7_Help.py              ← In-app version of USER_GUIDE.md
+│   ├── 8_Journal.py           ← Journal + notes
+│   └── 9_Strategy_Lab.py      ← Enhancements comparison and global presets
 ├── core/                      ← All business logic — zero Streamlit imports
 │   ├── tickers.py             ← The 21-stock watchlist
 │   ├── glossary.py            ← Definitions for tooltips & education
@@ -55,13 +58,15 @@ TRADEON/
 │   ├── macro.py               ← Cross-asset macro snapshot (Tier-2 toggle 2)
 │   ├── regime_grade.py        ← Regime-stratified trust grade (Tier-2 toggle 3)
 │   ├── circuit_breaker.py     ← Drawdown circuit-breaker (Tier-3 toggle 5)
-│   ├── pipeline_cache.py      ← Disk-persistent layer for analyse_one() (24h TTL, schema-versioned)
+│   ├── cache_pack.py          ← Build/validate/restore portable cache packs
+│   ├── pipeline_cache.py      ← Disk-persistent layer for analyse_one() (96h TTL, schema-versioned)
 │   ├── backtest_cache.py      ← Disk-persistent layer for Backtest Lab (7d TTL, schema-versioned; not bundled)
 │   ├── recommendations.py     ← In-watchlist suggester
 │   └── trade_walkthrough.py   ← Broker-specific "how to actually place this trade"
 ├── app_pipeline.py            ← Centralised analyse_one() — applies toggles, caches per-stock pipeline
 ├── scripts/
 │   ├── refresh_cache.py       ← Re-fetch all watchlist OHLCV → data_cache/*.parquet
+│   ├── refresh_pipeline_cache.py ← Rebuild bundled pipeline cache from the watchlist
 │   └── compare_enhancements.py ← Diagnostic: side-by-side accuracy across all 8 toggle combos
 ├── .github/workflows/
 │   ├── refresh-cache.yml      ← Weekday-morning GitHub Action that runs refresh_cache.py
@@ -276,7 +281,7 @@ Every backtest paper-trade result and every Forward Outlook return projection is
 
 ## 8. Data caching
 
-Two layers:
+Cache layers:
 
 | Layer | Location | TTL | Purpose |
 |-------|----------|-----|---------|
@@ -286,6 +291,8 @@ Two layers:
 | **Backtest Lab (memory)** | Streamlit memory (`@st.cache_data` on `cached_backtest`) | 1 hour | Within-session: instant when you flip back to the same symbol/model/horizon/fold-cap. |
 | **Backtest Lab (disk)** | `data_cache/backtest/*.pkl` (gitignored; per-deploy) | 7 days (configurable via `$TRADEON_BACKTEST_CACHE_TTL_HOURS`) | Same combo across sessions while the container lives; survives browser close. Wiped on redeploy like other runtime caches — not bundled (combo space too large). Override dir: `$TRADEON_BACKTEST_CACHE_DIR`. Schema-versioned in `core/backtest_cache.py`. |
 
+| **Portable cache pack (optional)** | `tradeon_cache_pack.zip` (Data Tools export/import) | Snapshot time + manifest metadata; user-managed | Move warm cache state between sessions/devices. Every import is validated before restore (schema version, SHA-256 checks, entry age, stale entries allowed with warning). |
+
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
 1. `$TRADEON_CACHE_DIR` env var if set
 2. `<repo_root>/data_cache`
@@ -294,6 +301,18 @@ Two layers:
 If none of the candidates are writable, a loud `logger.error` warns that subsequent cache writes will fail — better than a silent miss-then-OSError later. This makes the app robust on Streamlit Cloud (where the project dir is writable but ephemeral) and on more locked-down hosts (where only `/tmp` may be writable).
 
 The price-data disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which is exposed via the Watchlist page). The pipeline-output memory cache clears automatically on app restart or after 1 hour idle. The pipeline-output **disk** cache is wiped by `core/pipeline_cache.py:clear_pipeline_cache()` and auto-invalidates whenever `CACHE_VERSION` is bumped — bump it whenever the shape of `analyse_one()`'s return dict changes (new field, renamed dataclass, etc.). Backtest Lab disk entries are cleared by `core/backtest_cache.py:clear_backtest_cache()` (not exposed in the UI; for diagnostics or tests). Bump `core/backtest_cache.py:CACHE_VERSION` when `BacktestResult` shape changes.
+
+### Data Tools (recommended first-run path on iPad/tablet)
+
+For weakest-power sessions (or a fresh browser session after app sleep), use `pages/0_Data_Tools.py` as the warm-up control panel:
+
+1. **Pre-warm raw price cache now**: fetches/parses all watchlist `yfinance` parquet files into `data_cache/`.
+2. **Pre-compute watchlist analysis now**: runs `analyse_all()` once to populate on-disk pipeline cache and session-ready cache metadata.
+3. **Cache pack build/import**: optional zip export/import to quickly seed another session/device.
+
+The page also exposes cache lifecycle controls and shows current cache freshness at a glance (fresh / stale / missing counts).
+
+Dashboard and Forward Outlook support a cache-first render path when possible: they first attempt cached rows and defer full recompute until you explicitly trigger it. This is the primary iPad speed improvement introduced for mobile-friendly usability.
 
 ### Watchlist parallelism
 
@@ -367,6 +386,8 @@ The home-page Today's Playbook needs to know whether to auto-load or show a "Com
 2. The on-disk pipeline cache holds a fresh entry for every watchlist symbol at the requested (broker, toggle-combo).
 
 The disk-cache leg is critical on mobile: when iPad/Safari drops the WebSocket and the user reopens the app, they get a brand-new session with empty `session_state`. Without the disk-cache check, `is_watchlist_warm()` would return `False` on every visit and the user would see "Compute now" every time even though the data is sitting on disk.
+
+On low-power sessions, the same helper powers the cache-only paths in Dashboard and Forward Outlook: pages can render previously warmed rows immediately and only recompute when you explicitly click **Compute now**.
 
 Output ordering is **always WATCHLIST order** regardless of which worker finishes first, so downstream UI rendering stays deterministic across reruns. Per-symbol exceptions are caught and packaged into the result dict (`{"error": "..."}`), so one bad ticker can't kill the whole run.
 

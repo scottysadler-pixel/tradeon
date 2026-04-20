@@ -49,15 +49,41 @@ streamlit run app.py
 
 The app opens in your browser at <http://localhost:8501>.
 
+For repeatable iPad / tablet starts, do a one-time warm pass:
+
+1. Open **Data Tools**.
+2. Enable **Mobile speed profile** if needed (iPad-first defaults).
+3. Click **Pre-warm raw price cache now**.
+4. Click **Pre-compute watchlist analysis now**.
+
+After that warm pass, page transitions are much faster because Dashboard and Forward Outlook render cached rows immediately.
+
 ## Project layout
 
 ```text
 TRADEON/
 ├── app.py                     # Streamlit landing page
 ├── pages/                     # Multi-page UI
+│   ├── 0_Data_Tools.py         # Cache pre-warm + cache-pack controls
+│   ├── 1_Dashboard.py         # Watchlist overview + trust grades
+│   ├── 2_Deep_Dive.py         # Single-stock 20-year analysis
+│   ├── 3_Backtest_Lab.py      # Interactive prediction-vs-actual playground
+│   ├── 4_Forward_Outlook.py   # Live GO signals only
+│   ├── 5_Watchlist.py         # Watchlist + recommender + cache mgmt
+│   ├── 6_Learn.py             # Plain-English education
+│   ├── 7_Help.py              # In-app version of USER_GUIDE.md
+│   ├── 8_Journal.py           # Journal and scenario notes
+│   └── 9_Strategy_Lab.py      # Toggle comparisons and global presets
 ├── core/                      # All brains live here (no Streamlit imports)
+│   ├── cache_pack.py          # Build/validate/restore portable cache bundles
+│   ├── pipeline_cache.py      # Disk cache for analyse_one() output
+│   └── backtest_cache.py      # Disk cache for Backtest Lab
 ├── data_cache/                # Local Parquet cache (auto-created, gitignored)
-└── tests/                     # Pytest suite
+├── scripts/                   # Maintenance scripts (refresh cache + refresh pipeline)
+├── .streamlit/
+│   └── config.toml            # Streamlit runtime + folderWatchBlacklist
+├── tests/
+└── requirements.txt
 ```
 
 The `core/` package has zero UI dependencies, so it can be lifted into a FastAPI backend later if you want to upgrade to a hosted web app.
@@ -100,6 +126,7 @@ Optionally also point a Google Drive folder at the project root for a second cop
   - § 6.5 *The Strategy Lab* — what each toggle does
   - § 6.6 *Recommended toggle starter packs* — three ready-made combinations
   - § 6.7 *Reading the diagnostic captions* — how to read the new Forward Outlook annotations
+  - § 2.8 *Tablet-first first-run flow* — warming cache and using Data Tools on iPad
 - **[DOCS.md](./DOCS.md)** — technical reference: architecture, trust-grade math, the full data-flow diagram with all five toggle stages, every module explained
 - **[DEPLOY.md](./DEPLOY.md)** — step-by-step deploy to Streamlit Community Cloud for tablet access
 - **[IMPROVEMENTS.md](./IMPROVEMENTS.md)** — prioritised list of future enhancements (with deliberate restraint about what NOT to build), and which ones have already been built
