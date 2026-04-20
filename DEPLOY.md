@@ -112,7 +112,7 @@ About 30-60 seconds after the push, Streamlit Cloud rebuilds and reloads the liv
 | **RAM** | 1 GB per app. TRADEON uses well under this. |
 | **CPU** | Shared. First load after a sleep is slow (10-30 sec) because the watchlist analysis is heavy. |
 | **Sleep** | After ~7 days of zero traffic, the app sleeps. Visiting wakes it (~30 sec cold start). |
-| **Storage** | Ephemeral - any cache written *at runtime* vanishes on redeploy. We work around this by bundling pre-built parquet files into the repo (see [Pre-bundled price cache](#pre-bundled-price-cache) below). |
+| **Storage** | Ephemeral for anything **not** in git. On each deploy, Streamlit clones the repo, so committed `data_cache/*.parquet` and bundled `data_cache/pipeline/*.pkl` land on disk immediately. Runtime-only folders (e.g. `data_cache/backtest/` for Backtest Lab combo caches) are wiped on redeploy and refill as you click. |
 | **Bandwidth** | Plenty for personal use. |
 | **Public** | The URL is public unless you enable the Google-login gate (Step 5). |
 
@@ -138,9 +138,11 @@ Something missed `requirements.txt`. Add the missing package locally, push, rede
 
 ### App is slow on first load
 
-Expected on a *truly cold* deploy - the Dashboard page runs walk-forward backtests on the entire watchlist. After the first load the results are cached in memory for an hour, so subsequent visits are fast.
+With the bundled price cache and bundled pipeline pickles, the Dashboard should cold-load in **seconds**, not minutes. If you still see multi-minute loads, the bundle may be missing or yfinance may be failing (check logs).
 
-**The single biggest speed-up** is to make sure the bundled price cache is up to date. See [Pre-bundled price cache](#pre-bundled-price-cache) below: with it enabled, cold starts drop from 10-25 minutes to roughly 30-90 seconds because Streamlit Cloud no longer needs to refetch 20 years of OHLCV from yfinance for every symbol.
+**Backtest Lab** is different: each symbol/model/horizon/fold-cap combo runs a full walk-forward fit the first time (~30 sec). Re-opening the same combo is fast until the next redeploy (disk cache under `data_cache/backtest/`, not committed). See `DOCS.md` §8 and `USER_GUIDE.md` §5.
+
+**The single biggest speed-up** for *old* cold starts was making sure the bundled price cache is up to date. See [Pre-bundled price cache](#pre-bundled-price-cache) below: with it enabled, Streamlit Cloud no longer needs to refetch 20 years of OHLCV from yfinance for every symbol on every deploy.
 
 If even that isn't fast enough you can shrink the watchlist in `core/tickers.py`.
 

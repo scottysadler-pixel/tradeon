@@ -301,6 +301,12 @@ Workflow:
    - **Paper-trade net AUD** — what you would have made/lost trading this every fold, after fees and tax.
 6. Look at the chart. Are predictions roughly tracking actuals, or are they all over the place? The "Coverage" caption tells you exactly which date range the chart covers.
 
+### What downloads vs what gets recomputed
+
+- **Price history is not re-downloaded.** The Lab reads the same 20 years of daily prices from the bundled on-disk cache as the Dashboard (milliseconds). Changing the symbol still uses that file — no live Yahoo fetch per click.
+- **The slow part is the walk-forward fits.** For each historical date, TRADEON retrains the model and checks the prediction against what actually happened. That is why the first run of a given **stock + model + horizon + history-range** combination can take on the order of half a minute.
+- **Repeat visits are fast.** The app remembers each combination you have already run: once in memory for the current session, and on disk for about a week so a new browser tab or a return visit the next day can still be nearly instant. Open the **Cache health** expander at the bottom of the Backtest Lab page to see how many combinations are stored. After a fresh deploy (or if the host wipes its disk), that count resets and you pay the full compute once per combo again.
+
 **Compare ensemble to naive on the same stock.** If naive's paper-trade return is similar to ensemble's, the model is adding nothing useful for that stock — its trust grade should be C or worse.
 
 > **Did the chart used to stop in 2018?** Yes — the v1 backtest defaulted to keeping only the *oldest* 20 folds. v1.2 changed this to keep the *most recent* 60 folds, so you now see predictions all the way up to the most recent completed quarter. If you only want a quick test, use the "Last 5 years" preset.

@@ -56,6 +56,7 @@ TRADEON/
 │   ├── regime_grade.py        ← Regime-stratified trust grade (Tier-2 toggle 3)
 │   ├── circuit_breaker.py     ← Drawdown circuit-breaker (Tier-3 toggle 5)
 │   ├── pipeline_cache.py      ← Disk-persistent layer for analyse_one() (24h TTL, schema-versioned)
+│   ├── backtest_cache.py      ← Disk-persistent layer for Backtest Lab (7d TTL, schema-versioned; not bundled)
 │   ├── recommendations.py     ← In-watchlist suggester
 │   └── trade_walkthrough.py   ← Broker-specific "how to actually place this trade"
 ├── app_pipeline.py            ← Centralised analyse_one() — applies toggles, caches per-stock pipeline
@@ -282,6 +283,8 @@ Two layers:
 | **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 14 days / 336 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
 | **Pipeline output (memory)** | Streamlit memory (`@st.cache_data`) | 1 hour | Within-session: instant subsequent page navigation. Cleared by app restart. |
 | **Pipeline output (disk)** | `data_cache/pipeline/*.pkl` (committed; refreshed nightly by GitHub Action) | 24 hours (configurable via `$TRADEON_PIPELINE_CACHE_TTL_HOURS`) | Across-session: cold-load after sleep/wake or new browser session is ~0.2 sec instead of ~4 minutes. Bundled into the deploy so Streamlit Cloud free-tier (where containers wipe filesystem on sleep/redeploy) still benefits. Schema-versioned (`CACHE_VERSION`) so a deploy with code changes auto-invalidates the pickles. |
+| **Backtest Lab (memory)** | Streamlit memory (`@st.cache_data` on `cached_backtest`) | 1 hour | Within-session: instant when you flip back to the same symbol/model/horizon/fold-cap. |
+| **Backtest Lab (disk)** | `data_cache/backtest/*.pkl` (gitignored; per-deploy) | 7 days (configurable via `$TRADEON_BACKTEST_CACHE_TTL_HOURS`) | Same combo across sessions while the container lives; survives browser close. Wiped on redeploy like other runtime caches — not bundled (combo space too large). Override dir: `$TRADEON_BACKTEST_CACHE_DIR`. Schema-versioned in `core/backtest_cache.py`. |
 
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
 1. `$TRADEON_CACHE_DIR` env var if set
@@ -290,7 +293,7 @@ Two layers:
 
 If none of the candidates are writable, a loud `logger.error` warns that subsequent cache writes will fail — better than a silent miss-then-OSError later. This makes the app robust on Streamlit Cloud (where the project dir is writable but ephemeral) and on more locked-down hosts (where only `/tmp` may be writable).
 
-The price-data disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which is exposed via the Watchlist page). The pipeline-output memory cache clears automatically on app restart or after 1 hour idle. The pipeline-output **disk** cache is wiped by `core/pipeline_cache.py:clear_pipeline_cache()` and auto-invalidates whenever `CACHE_VERSION` is bumped — bump it whenever the shape of `analyse_one()`'s return dict changes (new field, renamed dataclass, etc.).
+The price-data disk cache is invalidated by `core/data.py:clear_cache(symbol=None)` (which is exposed via the Watchlist page). The pipeline-output memory cache clears automatically on app restart or after 1 hour idle. The pipeline-output **disk** cache is wiped by `core/pipeline_cache.py:clear_pipeline_cache()` and auto-invalidates whenever `CACHE_VERSION` is bumped — bump it whenever the shape of `analyse_one()`'s return dict changes (new field, renamed dataclass, etc.). Backtest Lab disk entries are cleared by `core/backtest_cache.py:clear_backtest_cache()` (not exposed in the UI; for diagnostics or tests). Bump `core/backtest_cache.py:CACHE_VERSION` when `BacktestResult` shape changes.
 
 ### Watchlist parallelism
 
