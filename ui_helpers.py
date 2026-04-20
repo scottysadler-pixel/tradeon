@@ -12,11 +12,30 @@ from core.tickers import WATCHLIST, Ticker, by_symbol
 
 
 def page_setup(title: str, icon: str = "") -> None:
+    # iPad / iOS Add-to-Home-Screen behaviour notes:
+    #   - Safari uses the FIRST word of page_title as the home-screen
+    #     icon label by default. "TRADEON" reads cleanly; the previous
+    #     "{title} - TRADEON" pattern caused per-page rename ("Dashboard
+    #     - TRADEON") that overwrote the saved icon's label on each visit.
+    #     Now the saved icon stays "TRADEON" forever.
+    #   - page_icon falls through to the iOS apple-touch-icon. Default
+    #     to a green chart emoji so the home-screen tile isn't blank.
+    page_icon = icon or "📈"
     st.set_page_config(
-        page_title=f"{title} - TRADEON",
-        page_icon=icon,
+        page_title="TRADEON",
+        page_icon=page_icon,
         layout="wide",
         initial_sidebar_state="expanded",
+    )
+    # Tell mobile Safari to paint the status bar to match our dark theme
+    # so the home-screen tile feels native rather than a white-bar webview.
+    # Cheap, no asset hosting required.
+    st.markdown(
+        '<meta name="theme-color" content="#0b1220">'
+        '<meta name="apple-mobile-web-app-capable" content="yes">'
+        '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
+        '<meta name="apple-mobile-web-app-title" content="TRADEON">',
+        unsafe_allow_html=True,
     )
     st.title(title)
 

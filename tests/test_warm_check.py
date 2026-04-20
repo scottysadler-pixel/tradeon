@@ -99,6 +99,7 @@ def test_is_warm_true_when_disk_fully_populated(isolated_pipeline_cache):
     for t in WATCHLIST:
         pipeline_cache.save_cached(
             t.symbol, "Stake", _toggles_off(), _fake_pipeline_result(t.symbol),
+            sync=True,
         )
 
     # is_watchlist_warm() should now return True from the disk-cache leg
@@ -116,6 +117,7 @@ def test_is_warm_false_when_one_symbol_missing(isolated_pipeline_cache):
     for t in WATCHLIST[:-1]:
         pipeline_cache.save_cached(
             t.symbol, "Stake", _toggles_off(), _fake_pipeline_result(t.symbol),
+            sync=True,
         )
 
     assert app_pipeline.is_watchlist_warm("Stake") is False
@@ -131,6 +133,7 @@ def test_watchlist_cache_status_counts_correctly(isolated_pipeline_cache):
     for t in WATCHLIST[:3]:
         pipeline_cache.save_cached(
             t.symbol, "Stake", _toggles_off(), _fake_pipeline_result(t.symbol),
+            sync=True,
         )
 
     status = app_pipeline.watchlist_cache_status("Stake")
@@ -164,6 +167,7 @@ def test_warm_per_broker_isolation(isolated_pipeline_cache):
     for t in WATCHLIST:
         pipeline_cache.save_cached(
             t.symbol, "Stake", _toggles_off(), _fake_pipeline_result(t.symbol),
+            sync=True,
         )
 
     assert app_pipeline.is_watchlist_warm("Stake") is True

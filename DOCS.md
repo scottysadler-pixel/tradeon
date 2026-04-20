@@ -282,7 +282,7 @@ Two layers:
 |-------|----------|-----|---------|
 | **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 14 days / 336 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
 | **Pipeline output (memory)** | Streamlit memory (`@st.cache_data`) | 1 hour | Within-session: instant subsequent page navigation. Cleared by app restart. |
-| **Pipeline output (disk)** | `data_cache/pipeline/*.pkl` (committed; refreshed nightly by GitHub Action) | 24 hours (configurable via `$TRADEON_PIPELINE_CACHE_TTL_HOURS`) | Across-session: cold-load after sleep/wake or new browser session is ~0.2 sec instead of ~4 minutes. Bundled into the deploy so Streamlit Cloud free-tier (where containers wipe filesystem on sleep/redeploy) still benefits. Schema-versioned (`CACHE_VERSION`) so a deploy with code changes auto-invalidates the pickles. |
+| **Pipeline output (disk)** | `data_cache/pipeline/*.pkl` (committed; refreshed nightly by GitHub Action) | 96 hours (configurable via `$TRADEON_PIPELINE_CACHE_TTL_HOURS`) | Across-session: cold-load after sleep/wake or new browser session is ~0.2 sec instead of ~4 minutes. Bundled into the deploy so Streamlit Cloud free-tier (where containers wipe filesystem on sleep/redeploy) still benefits. Schema-versioned (`CACHE_VERSION`) so a deploy with code changes auto-invalidates the pickles. **TTL is 96h (not 24h)** so a Friday-night refresh remains "fresh" through Sat/Sun/Mon-AEST visits — the GitHub Action only runs Mon-Fri. |
 | **Backtest Lab (memory)** | Streamlit memory (`@st.cache_data` on `cached_backtest`) | 1 hour | Within-session: instant when you flip back to the same symbol/model/horizon/fold-cap. |
 | **Backtest Lab (disk)** | `data_cache/backtest/*.pkl` (gitignored; per-deploy) | 7 days (configurable via `$TRADEON_BACKTEST_CACHE_TTL_HOURS`) | Same combo across sessions while the container lives; survives browser close. Wiped on redeploy like other runtime caches — not bundled (combo space too large). Override dir: `$TRADEON_BACKTEST_CACHE_DIR`. Schema-versioned in `core/backtest_cache.py`. |
 
@@ -328,6 +328,36 @@ Two-tier cache wraps the call (see `pages/3_Backtest_Lab.py:cached_backtest`):
 Unlike the watchlist pipeline cache, Backtest Lab pickles are **NOT bundled** in the repo. The combo space is much larger (5 models × 21 stocks × 3 fold-caps × variable horizons), and most combos are never opened. Letting the cache accumulate naturally as users explore is a reasonable middle ground. The Cache health expander on the Backtest Lab page reports the live count.
 
 Same `CACHE_VERSION` salt as `pipeline_cache` — bump it when `BacktestResult` schema changes. Regression tests: `tests/test_backtest_cache.py`.
+
+### File-watcher blacklist (the "constantly analyzing" fix)
+
+`.streamlit/config.toml` declares `folderWatchBlacklist = ["data_cache"]`.
+
+Without this, Streamlit's hot-reloader sees every `pickle.dump()` we make
+into `data_cache/pipeline/` or `data_cache/backtest/` as a source change
+and instantly restarts the app. Pre-fix symptom on iPad / mobile Safari:
+
+1. User opens app, taps "Compute playbook now".
+2. ~30 seconds in, the worker pool finishes the first stock and writes
+   `data_cache/pipeline/MSFT_<hash>.pkl`.
+3. Streamlit watcher fires → app restarts → in-flight executor is killed.
+4. User is bounced back to "Compute now". Loop repeats indefinitely.
+
+With the blacklist active, cache writes are invisible to the watcher and
+a normal scan completes in 90-180s with the bundled cache pre-warming
+most of the work to ~0s.
+
+### Async cache writes
+
+Both `core/pipeline_cache.save_cached()` and `core/backtest_cache.save_cached()`
+default to async — the actual `pickle.dump` runs on a daemon thread, the
+caller returns immediately. Belt-and-braces protection against any future
+caller in the request path that we forgot to take off the watcher's view.
+
+Tests and the nightly refresh script pass `sync=True` to wait for the
+write before returning (the refresh script especially — daemon threads
+die when the process exits, and we need the pickle on disk before
+`git add data_cache/`).
 
 ### `is_watchlist_warm()` semantics
 
@@ -406,7 +436,7 @@ Most behaviour is parameterised. Common things to tweak:
 | Backtest horizon | `core/backtest.py` (default 90 days) |
 | Default max folds for live watchlist | `app_pipeline.py:WATCHLIST_MAX_FOLDS` (currently 12, prefer-recent — was 20 before v1.4) |
 | Watchlist parallel worker count | `app_pipeline.py:DEFAULT_PARALLEL_WORKERS` (currently 4) |
-| Pipeline disk cache TTL (hours) | `core/pipeline_cache.py:PIPELINE_CACHE_TTL_HOURS` (default 24h, env override: `TRADEON_PIPELINE_CACHE_TTL_HOURS`) |
+| Pipeline disk cache TTL (hours) | `core/pipeline_cache.py:PIPELINE_CACHE_TTL_HOURS` (default 96h, env override: `TRADEON_PIPELINE_CACHE_TTL_HOURS`) |
 | Pipeline disk cache version (forces invalidation) | `core/pipeline_cache.py:CACHE_VERSION` |
 | Default max folds for Backtest Lab | `core/backtest.py` (currently 60, prefer-recent) |
 | GO signal thresholds | `core/signals.py:decide` |

@@ -53,7 +53,7 @@ def _toggles_off() -> dict:
 def test_save_load_roundtrip_strips_volatile_fields(tmp_pipeline_cache):
     _, pc = tmp_pipeline_cache
     res = _sample_result()
-    pc.save_cached("MSFT", "Stake", _toggles_off(), res)
+    pc.save_cached("MSFT", "Stake", _toggles_off(), res, sync=True)
     loaded = pc.load_cached("MSFT", "Stake", _toggles_off())
     assert loaded is not None
     assert loaded["symbol"] == "MSFT"
@@ -70,7 +70,7 @@ def test_load_returns_none_for_missing_entry(tmp_pipeline_cache):
 
 def test_load_returns_none_for_stale_entry(tmp_pipeline_cache):
     _, pc = tmp_pipeline_cache
-    pc.save_cached("MSFT", "Stake", _toggles_off(), _sample_result())
+    pc.save_cached("MSFT", "Stake", _toggles_off(), _sample_result(), sync=True)
     # Entry was saved but TTL of 0 makes everything stale.
     assert pc.load_cached("MSFT", "Stake", _toggles_off(), ttl_hours=0) is None
 
@@ -78,7 +78,7 @@ def test_load_returns_none_for_stale_entry(tmp_pipeline_cache):
 def test_save_skips_error_results(tmp_pipeline_cache):
     _, pc = tmp_pipeline_cache
     bad = {"symbol": "FOO", "error": "no data"}
-    pc.save_cached("FOO", "Stake", _toggles_off(), bad)
+    pc.save_cached("FOO", "Stake", _toggles_off(), bad, sync=True)
     assert pc.load_cached("FOO", "Stake", _toggles_off()) is None
 
 
@@ -87,8 +87,8 @@ def test_different_toggles_get_different_cache_slots(tmp_pipeline_cache):
     vanilla = _toggles_off()
     with_garch = {**vanilla, "enh_garch": True}
 
-    pc.save_cached("MSFT", "Stake", vanilla, {**_sample_result(), "trust_score": 50.0})
-    pc.save_cached("MSFT", "Stake", with_garch, {**_sample_result(), "trust_score": 80.0})
+    pc.save_cached("MSFT", "Stake", vanilla, {**_sample_result(), "trust_score": 50.0}, sync=True)
+    pc.save_cached("MSFT", "Stake", with_garch, {**_sample_result(), "trust_score": 80.0}, sync=True)
 
     a = pc.load_cached("MSFT", "Stake", vanilla)
     b = pc.load_cached("MSFT", "Stake", with_garch)
@@ -98,8 +98,8 @@ def test_different_toggles_get_different_cache_slots(tmp_pipeline_cache):
 
 def test_different_brokers_get_different_cache_slots(tmp_pipeline_cache):
     _, pc = tmp_pipeline_cache
-    pc.save_cached("MSFT", "Stake", _toggles_off(), {**_sample_result(), "trust_score": 60.0})
-    pc.save_cached("MSFT", "CommSec", _toggles_off(), {**_sample_result(), "trust_score": 65.0})
+    pc.save_cached("MSFT", "Stake", _toggles_off(), {**_sample_result(), "trust_score": 60.0}, sync=True)
+    pc.save_cached("MSFT", "CommSec", _toggles_off(), {**_sample_result(), "trust_score": 65.0}, sync=True)
     a = pc.load_cached("MSFT", "Stake", _toggles_off())
     b = pc.load_cached("MSFT", "CommSec", _toggles_off())
     assert a["trust_score"] == 60.0
@@ -120,7 +120,7 @@ def test_corrupt_pickle_returns_none_and_deletes_file(tmp_pipeline_cache):
 def test_version_mismatch_returns_none(tmp_pipeline_cache):
     tmp_path, pc = tmp_pipeline_cache
     # Save normally then patch the module's CACHE_VERSION so reading sees a mismatch.
-    pc.save_cached("MSFT", "Stake", _toggles_off(), _sample_result())
+    pc.save_cached("MSFT", "Stake", _toggles_off(), _sample_result(), sync=True)
     fname = pc._key_to_filename("MSFT", "Stake", _toggles_off())
     saved = (tmp_path / fname).exists()
     assert saved
@@ -132,9 +132,9 @@ def test_version_mismatch_returns_none(tmp_pipeline_cache):
 
 def test_clear_pipeline_cache_removes_all_pickles(tmp_pipeline_cache):
     _, pc = tmp_pipeline_cache
-    pc.save_cached("MSFT", "Stake", _toggles_off(), _sample_result("MSFT"))
-    pc.save_cached("BHP.AX", "Stake", _toggles_off(), _sample_result("BHP.AX"))
-    pc.save_cached("AAPL", "Stake", _toggles_off(), _sample_result("AAPL"))
+    pc.save_cached("MSFT", "Stake", _toggles_off(), _sample_result("MSFT"), sync=True)
+    pc.save_cached("BHP.AX", "Stake", _toggles_off(), _sample_result("BHP.AX"), sync=True)
+    pc.save_cached("AAPL", "Stake", _toggles_off(), _sample_result("AAPL"), sync=True)
     n = pc.clear_pipeline_cache()
     assert n == 3
     # All gone.
@@ -157,7 +157,7 @@ def test_save_is_atomic_via_tmp_file(tmp_pipeline_cache):
     tmp_path, pc = tmp_pipeline_cache
     res = _sample_result()
     # First do a real save so we have a valid file to check non-corruption against.
-    pc.save_cached("MSFT", "Stake", _toggles_off(), res)
+    pc.save_cached("MSFT", "Stake", _toggles_off(), res, sync=True)
     fname = pc._key_to_filename("MSFT", "Stake", _toggles_off())
     pkl_path = tmp_path / fname
     original_bytes = pkl_path.read_bytes()
@@ -166,7 +166,7 @@ def test_save_is_atomic_via_tmp_file(tmp_pipeline_cache):
     import pickle as _pk
     with patch.object(_pk, "dump", side_effect=OSError("disk full")):
         # Should not raise — best-effort save.
-        pc.save_cached("MSFT", "Stake", _toggles_off(), {**res, "trust_score": 99.0})
+        pc.save_cached("MSFT", "Stake", _toggles_off(), {**res, "trust_score": 99.0}, sync=True)
 
     # File still has the original valid bytes; the failed write didn't clobber it.
     assert pkl_path.read_bytes() == original_bytes

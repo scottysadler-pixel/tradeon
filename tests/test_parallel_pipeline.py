@@ -123,7 +123,7 @@ def test_disk_cache_skips_recompute_on_second_analyse_one(reload_pipeline_cache_
         "vol": None, "macro": None, "regime_grade_obj": None,
         "backtest": None, "recency_weights": None, "breaker": None,
     }
-    pipeline_cache.save_cached("MSFT", "Stake", toggles, fake_result)
+    pipeline_cache.save_cached("MSFT", "Stake", toggles, fake_result, sync=True)
 
     # Patch the heavy stages so we can detect if they're called.
     backtest_calls = {"n": 0}

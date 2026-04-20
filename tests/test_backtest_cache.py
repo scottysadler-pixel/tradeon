@@ -47,7 +47,7 @@ def _fake_result():
 def test_save_load_roundtrip(tmp_bt_cache):
     _, bc = tmp_bt_cache
     result = _fake_result()
-    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, result)
+    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, result, sync=True)
     loaded = bc.load_cached("MSFT", "ensemble", 90, "US", "Stake", 60)
     assert loaded is not None
     assert loaded["mape_pct"] == pytest.approx(12.3)
@@ -61,16 +61,16 @@ def test_load_returns_none_for_missing(tmp_bt_cache):
 
 def test_load_returns_none_for_stale(tmp_bt_cache):
     _, bc = tmp_bt_cache
-    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, _fake_result())
+    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, _fake_result(), sync=True)
     assert bc.load_cached("MSFT", "ensemble", 90, "US", "Stake", 60, ttl_hours=0) is None
 
 
 def test_different_combos_get_different_files(tmp_bt_cache):
     _, bc = tmp_bt_cache
-    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, {**_fake_result(), "mape_pct": 10.0})
-    bc.save_cached("MSFT", "arima",    90, "US", "Stake", 60, {**_fake_result(), "mape_pct": 20.0})
-    bc.save_cached("MSFT", "ensemble", 30, "US", "Stake", 60, {**_fake_result(), "mape_pct": 30.0})
-    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 20, {**_fake_result(), "mape_pct": 40.0})
+    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, {**_fake_result(), "mape_pct": 10.0}, sync=True)
+    bc.save_cached("MSFT", "arima",    90, "US", "Stake", 60, {**_fake_result(), "mape_pct": 20.0}, sync=True)
+    bc.save_cached("MSFT", "ensemble", 30, "US", "Stake", 60, {**_fake_result(), "mape_pct": 30.0}, sync=True)
+    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 20, {**_fake_result(), "mape_pct": 40.0}, sync=True)
 
     assert bc.load_cached("MSFT", "ensemble", 90, "US", "Stake", 60)["mape_pct"] == 10.0
     assert bc.load_cached("MSFT", "arima",    90, "US", "Stake", 60)["mape_pct"] == 20.0
@@ -90,8 +90,8 @@ def test_corrupt_pickle_returns_none_and_deletes(tmp_bt_cache):
 
 def test_clear_backtest_cache(tmp_bt_cache):
     _, bc = tmp_bt_cache
-    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, _fake_result())
-    bc.save_cached("AAPL", "arima",    30, "US", "Stake", 20, _fake_result())
+    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, _fake_result(), sync=True)
+    bc.save_cached("AAPL", "arima",    30, "US", "Stake", 20, _fake_result(), sync=True)
     assert bc.cache_count() == 2
     n = bc.clear_backtest_cache()
     assert n == 2
@@ -116,12 +116,12 @@ def test_save_does_not_raise_on_disk_error(tmp_bt_cache):
     import pickle as _pk
     with patch.object(_pk, "dump", side_effect=OSError("disk full")):
         # Must not raise.
-        bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, _fake_result())
+        bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, _fake_result(), sync=True)
     # And nothing got persisted.
     assert bc.cache_count() == 0
 
 
 def test_save_does_not_persist_none(tmp_bt_cache):
     _, bc = tmp_bt_cache
-    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, None)
+    bc.save_cached("MSFT", "ensemble", 90, "US", "Stake", 60, None, sync=True)
     assert bc.cache_count() == 0

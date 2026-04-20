@@ -154,9 +154,21 @@ Click **Dashboard** in the left navigation.
 The first time you do this, the system has work to do — it loads 20 years of data for 21 stocks and runs walk-forward backtests on each.
 
 - **First-ever load on a fresh deploy:** roughly **3-5 minutes**. The 21 stocks are processed in parallel across 4 worker threads, but the underlying backtest work still has to happen once. Make a coffee.
-- **Cold load after the app went to sleep / new browser session:** **a few seconds**. As of v1.4 there's a disk cache that survives sleeps, so once the app has run analyse-all even once, every subsequent cold load is near-instant.
+- **Cold load after the app went to sleep / new browser session:** **a few seconds**. The pipeline cache is committed to the repo and refreshed nightly by a GitHub Action, so every cold load on Streamlit Cloud reads from the bundled pickles instead of recomputing.
 - **Subsequent visits within the same session:** instant (results are cached in memory).
 - **If the bundled price cache is missing or stale**, the first load can take 10-25 minutes because Streamlit has to refetch every symbol from yfinance. This should happen rarely — the nightly GitHub Action refreshes the bundled cache every weekday morning.
+
+> **Why earlier versions felt "constantly analyzing" on iPad.** Streamlit
+> auto-restarts the app whenever any file in the project changes. The
+> pipeline writes pickled forecasts to `data_cache/` while a scan is
+> running — so every save was triggering an instant restart, killing
+> the in-flight scan, and the whole loop began again. As of v1.5 the
+> watcher is told to ignore `data_cache/` (see `.streamlit/config.toml`
+> → `folderWatchBlacklist`), cache writes happen on a background thread
+> so the UI never waits, and the cache TTL was bumped to 96 hours so
+> Friday-night refreshes survive the weekend. If you ever see the slow
+> behaviour again, the recovery path is `Engine status → Pipeline cache
+> health` on the home page.
 
 While you wait, you can navigate to other pages — they don't share the same long-running calculation.
 
@@ -595,6 +607,8 @@ A: TRADEON doesn't store any personal data. The only thing that travels is OHLCV
 | Dashboard data feels old | Cache TTL is 14 days (intentionally generous so brief outages don't cascade). Click **Refresh all** at the top of the Dashboard to force a re-fetch. Or wait — the GitHub Action refreshes the bundled cache every weekday morning. |
 | Trust grade dropped sharply | Recent market shock — this is the system reacting honestly. Wait a few weeks for it to stabilise. |
 | Cloud app is slow to wake | Free tier sleeps after 7 days idle. First visit takes ~30 sec to wake. |
+| App keeps saying "compute playbook now", restarts every minute, never finishes (the old iPad bug) | Should be impossible as of v1.5 — the file watcher now ignores `data_cache/`. If you see it again, something is rewriting files inside the project directory other than the cache. Check `Engine status → Pipeline cache health` on the home page; if it shows < 21 fresh symbols, hit **Compute playbook now** once and let it finish. |
+| Want it to be much faster | Run locally — see [LOCAL_RUN.md](LOCAL_RUN.md). 10× the worker CPU and the disk cache never gets wiped. |
 | Local app won't start | Activate the venv (`.\.venv\Scripts\Activate.ps1`) then `streamlit run app.py` |
 | Strategy Lab error like `Enhancements got an unexpected keyword argument` | Schema drift after a deploy. Click the **"Clear cached settings + cache"** button at the top of the Strategy Lab page — it rebuilds the settings object and clears the pipeline cache. |
 

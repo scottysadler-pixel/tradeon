@@ -36,6 +36,7 @@ import logging
 import os
 import pickle
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -149,12 +150,35 @@ def load_cached(
     return payload.get("result")
 
 
+def _do_save(symbol: str, model_key: str, path: Path, payload: dict[str, Any]) -> None:
+    """Actual pickle.dump. Split out so save_cached can hand it to a thread."""
+    tmp = path.with_suffix(".pkl.tmp")
+    try:
+        with tmp.open("wb") as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.replace(path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Failed to save backtest cache for %s/%s: %s",
+                       symbol, model_key, e)
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def save_cached(
     symbol: str, model_key: str, horizon: int,
     market: str, broker: str, max_folds: int,
     result: Any,
+    *,
+    sync: bool = False,
 ) -> None:
-    """Persist a BacktestResult to disk. Best-effort; never raises."""
+    """Persist a BacktestResult to disk. Best-effort; never raises.
+
+    Async by default — pickle.dump runs on a daemon thread so the
+    Backtest Lab page returns immediately. Pass `sync=True` from
+    tests that need to assert on the persisted file straight after.
+    """
     if result is None:
         return
     payload = {
@@ -169,18 +193,15 @@ def save_cached(
     path = CACHE_DIR / _key_to_filename(
         symbol, model_key, horizon, market, broker, max_folds,
     )
-    tmp = path.with_suffix(".pkl.tmp")
-    try:
-        with tmp.open("wb") as f:
-            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
-        tmp.replace(path)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Failed to save backtest cache for %s/%s: %s",
-                       symbol, model_key, e)
-        try:
-            tmp.unlink(missing_ok=True)
-        except Exception:  # noqa: BLE001
-            pass
+    if sync:
+        _do_save(symbol, model_key, path, payload)
+        return
+    threading.Thread(
+        target=_do_save,
+        args=(symbol, model_key, path, payload),
+        name=f"backtest-cache-save-{symbol}-{model_key}",
+        daemon=True,
+    ).start()
 
 
 def clear_backtest_cache() -> int:

@@ -14,5 +14,21 @@ font = "sans serif"
 headless = true
 runOnSave = true
 
+# CRITICAL FIX for the "constantly analyzing" / 5-minute-reload-loop bug.
+#
+# Streamlit's hot-reloader watches every file under the project folder by
+# default. The pipeline writes pickled forecast results into data_cache/
+# while a watchlist scan is running. Without this blacklist, every save
+# triggers an instant app restart -- the in-progress scan is killed, the
+# user is bounced back to a blank screen, and the work begins again. The
+# loop typically takes 5+ minutes to grind through all 21 stocks (and on
+# mobile Safari it can effectively never finish).
+#
+# Excluding data_cache makes cache writes invisible to the watcher. The
+# scan completes once, results persist, every subsequent visit is instant.
+# Folder-level blacklist is documented at
+# https://docs.streamlit.io/develop/api-reference/configuration/config.toml
+folderWatchBlacklist = ["data_cache"]
+
 [browser]
 gatherUsageStats = false

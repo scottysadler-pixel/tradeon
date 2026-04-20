@@ -39,6 +39,7 @@ import logging
 import os
 import pickle
 import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -51,12 +52,21 @@ logger = logging.getLogger(__name__)
 CACHE_VERSION = "v1"
 
 # How long a cached entry is considered fresh. Override via env var.
+#
+# 96h (4 days) covers the entire weekend gap in the nightly refresh
+# schedule. The GitHub Action only runs Mon-Fri (markets are closed on
+# weekends and we don't want to burn Actions minutes for no-op refreshes),
+# so the Friday-night cache must remain "fresh" through Sat, Sun, and
+# Monday-morning AEST visits. The previous 24h TTL meant every weekend
+# visit treated the bundled cache as stale and triggered the slow
+# recompute path -- the same path that used to thrash via the file
+# watcher (now blacklisted in .streamlit/config.toml).
 try:
     PIPELINE_CACHE_TTL_HOURS = int(
-        os.environ.get("TRADEON_PIPELINE_CACHE_TTL_HOURS", "24")
+        os.environ.get("TRADEON_PIPELINE_CACHE_TTL_HOURS", "96")
     )
 except ValueError:
-    PIPELINE_CACHE_TTL_HOURS = 24
+    PIPELINE_CACHE_TTL_HOURS = 96
 
 # Field that is intentionally NOT pickled — it's large (~5 MB) and trivially
 # regenerated from the existing parquet cache via core.data.fetch_history.
@@ -175,17 +185,43 @@ def load_cached(
     return result
 
 
+def _do_save(symbol: str, path: Path, payload: dict[str, Any]) -> None:
+    """Actual pickle.dump. Split out so save_cached can hand it to a thread."""
+    tmp = path.with_suffix(".pkl.tmp")
+    try:
+        with tmp.open("wb") as f:
+            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.replace(path)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Failed to save pipeline cache for %s: %s", symbol, e)
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def save_cached(
     symbol: str,
     broker: str,
     toggles: dict[str, bool],
     result: dict[str, Any],
+    *,
+    sync: bool = False,
 ) -> None:
     """Persist a pipeline result to disk for the next session.
 
     Strips the volatile `df` field before pickling (re-fetched cheaply on
     load). All errors are swallowed — caching is best-effort, never let
     a write failure crash a live page.
+
+    Async by default
+    ----------------
+    The actual pickle.dump runs on a daemon thread so the UI thread
+    never waits on disk I/O. Even though the file watcher is now
+    blacklisted (see .streamlit/config.toml), we still don't want the
+    user's browser request blocked behind a 50-200 ms write per stock
+    times 21 stocks. Pass `sync=True` from tests that need to assert
+    on the persisted file straight after the call returns.
     """
     if not isinstance(result, dict):
         return
@@ -199,17 +235,15 @@ def save_cached(
         "result": persisted,
     }
     path = CACHE_DIR / _key_to_filename(symbol, broker, toggles)
-    tmp = path.with_suffix(".pkl.tmp")
-    try:
-        with tmp.open("wb") as f:
-            pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
-        tmp.replace(path)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("Failed to save pipeline cache for %s: %s", symbol, e)
-        try:
-            tmp.unlink(missing_ok=True)
-        except Exception:  # noqa: BLE001
-            pass
+    if sync:
+        _do_save(symbol, path, payload)
+        return
+    threading.Thread(
+        target=_do_save,
+        args=(symbol, path, payload),
+        name=f"pipeline-cache-save-{symbol}",
+        daemon=True,
+    ).start()
 
 
 def clear_pipeline_cache() -> int:

@@ -94,7 +94,10 @@ def _refresh_one(symbol: str) -> dict:
         # Belt + braces: save explicitly even though analyse_one already
         # called save_cached(). This way a future refactor of analyse_one
         # that drops the auto-save still produces a valid bundle here.
-        save_cached(symbol, BROKER, VANILLA_TOGGLES, result)
+        # sync=True is critical here — the live app uses async writes
+        # (daemon threads) which would die when this script exits before
+        # the pickle hits disk. Tests use the same opt-in.
+        save_cached(symbol, BROKER, VANILLA_TOGGLES, result, sync=True)
 
         # Read it back to make sure the pickle is loadable. If pickle.load
         # blows up here (e.g. a non-picklable field crept into the result
