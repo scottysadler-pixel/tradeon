@@ -36,6 +36,12 @@ data_cache/pipeline/*
 # longer matches the live code, so a code change between bundle and deploy
 # is safe (worst case: one slow load until the next nightly bundle).
 
+# Backtest Lab disk cache. NOT bundled — it accumulates naturally as
+# users explore (5 models × 21 stocks × 3 fold-caps × variable horizons
+# is a much larger combo space than the watchlist pipeline cache).
+# Each Streamlit Cloud container builds up its own as people use the app.
+data_cache/backtest/
+
 # Stray parquet files anywhere else in the tree are still ignored.
 /*.parquet
 **/scratch_*.parquet

@@ -10,6 +10,11 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core.backtest import backtest_model
+from core.backtest_cache import (
+    cache_count as bt_cache_count,
+    load_cached as bt_load_cached,
+    save_cached as bt_save_cached,
+)
 from core.data import fetch_history
 from core.forecast import (
     arima_forecast,
@@ -73,19 +78,31 @@ def get_df(symbol: str) -> pd.DataFrame:
     return normalise_to_aud(raw, by_symbol(symbol))
 
 
-# Cached backtest. Without this, every change to model/horizon/coverage
-# re-ran 60 folds × 1 model = ~30 sec per click. With it, identical
-# settings hit memory in milliseconds, so flipping back and forth is snappy.
-# Cache key: (symbol, model_key, horizon, market, broker, max_folds).
+# Two-tier cache for the expensive backtest_model() call:
+#   1. @st.cache_data    — in-process memory, instant within a session
+#   2. backtest_cache.py — on-disk pickle, instant across sessions and
+#                          across Streamlit Cloud restarts (within one
+#                          container's uptime period)
+# Together: first time you click a (symbol, model, horizon, folds)
+# combo costs ~30 sec; every subsequent visit is ~50 ms forever (or
+# until the 7-day TTL expires).
 @st.cache_data(ttl=3600, show_spinner=False)
 def cached_backtest(symbol: str, model_key: str, horizon: int,
                     market: str, broker: str, max_folds: int):
+    cached = bt_load_cached(symbol, model_key, horizon, market, broker, max_folds)
+    if cached is not None:
+        return cached
     df = get_df(symbol)
-    return backtest_model(
+    result = backtest_model(
         df, MODEL_MAP[model_key],
         horizon_days=horizon, market=market, broker=broker,
         max_folds=max_folds, prefer_recent=True,
     )
+    try:
+        bt_save_cached(symbol, model_key, horizon, market, broker, max_folds, result)
+    except Exception:  # noqa: BLE001
+        pass
+    return result
 
 
 df = get_df(ticker.symbol)
@@ -134,4 +151,15 @@ st.caption(
     "then check the prediction against what really happened next. The most honest "
     "way to test a forecasting strategy."
 )
+
+with st.expander("Cache health", expanded=False):
+    n_cached = bt_cache_count()
+    st.caption(
+        f"**{n_cached}** backtest combo(s) cached on disk. Each combo "
+        "(symbol × model × horizon × fold-cap) takes ~30 sec the first "
+        "time and ~50 ms every subsequent visit (within 7 days). The "
+        "cache builds up naturally as you explore — combos you never "
+        "open are never computed."
+    )
+
 render_disclaimer()

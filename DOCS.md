@@ -313,6 +313,19 @@ Safety:
 - The refresh script reads each pickle back after writing to verify it round-trips cleanly. Failures are recorded in `data_cache/PIPELINE_MANIFEST.json` and skipped from the bundle.
 - Only **vanilla** toggle combos are bundled (5 toggles × 32 combinations would bloat the bundle 32x); non-vanilla combos remain a per-user recompute.
 
+### Backtest Lab disk cache
+
+Backtest Lab calls `core.backtest.backtest_model()` for a user-selected `(symbol, model, horizon, fold-cap)` combo. Each run is ~30 sec because it walk-forward fits the model across up to 60 historical periods. The price data itself is read from the bundled parquet (~40ms) and is **never** re-downloaded — only the model fits are recomputed.
+
+Two-tier cache wraps the call (see `pages/3_Backtest_Lab.py:cached_backtest`):
+
+1. `@st.cache_data(ttl=3600)` — in-process memory, instant within a session.
+2. `core/backtest_cache.py` — on-disk pickle (`data_cache/backtest/*.pkl`), instant across sessions and across Streamlit Cloud restarts within one container's uptime period (~7-day TTL).
+
+Unlike the watchlist pipeline cache, Backtest Lab pickles are **NOT bundled** in the repo. The combo space is much larger (5 models × 21 stocks × 3 fold-caps × variable horizons), and most combos are never opened. Letting the cache accumulate naturally as users explore is a reasonable middle ground. The Cache health expander on the Backtest Lab page reports the live count.
+
+Same `CACHE_VERSION` salt as `pipeline_cache` — bump it when `BacktestResult` schema changes. Regression tests: `tests/test_backtest_cache.py`.
+
 ### `is_watchlist_warm()` semantics
 
 The home-page Today's Playbook needs to know whether to auto-load or show a "Compute now" button. `is_watchlist_warm()` returns `True` if EITHER:
@@ -351,6 +364,7 @@ This split is what fixed the v1.3.1 "Streamlit Cloud shows 21 symbol(s) failed t
 | `tests/test_pipeline_cache.py` | Synthetic data | Disk-persistent pipeline cache: save/load round-trip drops volatile fields, stale entries ignored, corrupt pickles auto-deleted, schema version mismatch ignored, different toggle combos and brokers get different cache slots, atomic writes via `.tmp` rename, `clear_pipeline_cache()` |
 | `tests/test_parallel_pipeline.py` | Mocked `analyse_one` | Parallel `analyse_all`: output preserves WATCHLIST order despite out-of-order completion, `max_workers=1` falls back to sequential, per-symbol exceptions don't kill the run, disk-cache hit short-circuits the heavy backtest path |
 | `tests/test_warm_check.py` | Synthetic pickles | `is_watchlist_warm()` returns True from disk cache alone when session_state is empty (the iPad regression), False when even one symbol is missing, isolates per-broker, never crashes when cache dir is removed mid-flight |
+| `tests/test_backtest_cache.py` | Synthetic data | Backtest Lab disk cache: save/load round-trip, TTL freshness, different combos get different files (model/horizon/fold-cap), corrupt-pickle auto-deletion, `clear_backtest_cache()`, dot-symbols sanitised in filenames, `save_cached` swallows disk errors, never persists `None` |
 | `tests/test_pipeline_smoke.py` | Static + headless pipeline | Two layers: (1) every page in `pages/` is `py_compile`-checked and AST-walked for unresolvable imports; (2) `analyse_one()` is called on MSFT and BHP.AX across every toggle combination, and `analyse_all()` is called on the full watchlist with `enh=all_off()`. Catches schema-drift regressions like the Tier-3 `Enhancements` `TypeError`. |
 | `tests/test_live.py` | Real yfinance data | MSFT and BHP.AX through the full pipeline (optional, network-dependent) |
 
