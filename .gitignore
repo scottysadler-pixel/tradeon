@@ -22,11 +22,19 @@ data_cache/*
 !data_cache/.gitkeep
 !data_cache/*.parquet
 !data_cache/MANIFEST.json
+!data_cache/PIPELINE_MANIFEST.json
+!data_cache/pipeline/
+data_cache/pipeline/*
+!data_cache/pipeline/.gitkeep
+!data_cache/pipeline/*.pkl
+!data_cache/pipeline/PIPELINE_MANIFEST.json
 
-# Pipeline result pickles (disk-persistent layer of the @st.cache_data
-# tier). Each deploy generates its own — they're keyed by CACHE_VERSION,
-# so stale ones across versions are auto-rejected. No need to commit them.
-data_cache/pipeline/
+# Bundled pipeline cache pickles ARE committed (refreshed nightly by
+# .github/workflows/refresh-cache.yml). They ride the deploy so Streamlit
+# Cloud's cold start lands with a fully-warm pipeline cache. CACHE_VERSION
+# salt in core/pipeline_cache.py auto-invalidates pickles whose schema no
+# longer matches the live code, so a code change between bundle and deploy
+# is safe (worst case: one slow load until the next nightly bundle).
 
 # Stray parquet files anywhere else in the tree are still ignored.
 /*.parquet

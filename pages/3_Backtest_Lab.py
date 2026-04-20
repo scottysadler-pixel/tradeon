@@ -73,13 +73,27 @@ def get_df(symbol: str) -> pd.DataFrame:
     return normalise_to_aud(raw, by_symbol(symbol))
 
 
+# Cached backtest. Without this, every change to model/horizon/coverage
+# re-ran 60 folds × 1 model = ~30 sec per click. With it, identical
+# settings hit memory in milliseconds, so flipping back and forth is snappy.
+# Cache key: (symbol, model_key, horizon, market, broker, max_folds).
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_backtest(symbol: str, model_key: str, horizon: int,
+                    market: str, broker: str, max_folds: int):
+    df = get_df(symbol)
+    return backtest_model(
+        df, MODEL_MAP[model_key],
+        horizon_days=horizon, market=market, broker=broker,
+        max_folds=max_folds, prefer_recent=True,
+    )
+
+
 df = get_df(ticker.symbol)
 
 with st.spinner(f"Backtesting {model_key} on {ticker.symbol} ({_FOLD_CAP} folds)..."):
-    result = backtest_model(
-        df, MODEL_MAP[model_key],
-        horizon_days=horizon, market=ticker.market, broker=broker,
-        max_folds=_FOLD_CAP, prefer_recent=True,
+    result = cached_backtest(
+        ticker.symbol, model_key, horizon,
+        ticker.market, broker, _FOLD_CAP,
     )
 
 st.markdown(f"#### Results: {result.model_name}")

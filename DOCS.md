@@ -281,7 +281,7 @@ Two layers:
 |-------|----------|-----|---------|
 | **Bundled OHLCV** | `data_cache/*.parquet` (committed to repo) | 14 days / 336 hours (configurable via `$TRADEON_CACHE_TTL_HOURS`) | Pre-warm Streamlit Cloud cold starts; avoid hammering yfinance |
 | **Pipeline output (memory)** | Streamlit memory (`@st.cache_data`) | 1 hour | Within-session: instant subsequent page navigation. Cleared by app restart. |
-| **Pipeline output (disk)** | `data_cache/pipeline/*.pkl` (gitignored, runtime-only) | 24 hours (configurable via `$TRADEON_PIPELINE_CACHE_TTL_HOURS`) | Across-session: cold-load after sleep/wake or new browser session is ~0.2 sec instead of ~4 minutes. Schema-versioned (`CACHE_VERSION`) so a deploy with code changes auto-invalidates the pickles. |
+| **Pipeline output (disk)** | `data_cache/pipeline/*.pkl` (committed; refreshed nightly by GitHub Action) | 24 hours (configurable via `$TRADEON_PIPELINE_CACHE_TTL_HOURS`) | Across-session: cold-load after sleep/wake or new browser session is ~0.2 sec instead of ~4 minutes. Bundled into the deploy so Streamlit Cloud free-tier (where containers wipe filesystem on sleep/redeploy) still benefits. Schema-versioned (`CACHE_VERSION`) so a deploy with code changes auto-invalidates the pickles. |
 
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
 1. `$TRADEON_CACHE_DIR` env var if set
@@ -296,12 +296,31 @@ The price-data disk cache is invalidated by `core/data.py:clear_cache(symbol=Non
 
 `app_pipeline.analyse_all()` runs the per-stock pipeline across **4 worker threads** by default (override via `max_workers=`). The heavy lifting (statsmodels ARIMA fits, prophet, hmmlearn HMM) all release the GIL during numerical work, so threading delivers a real ~1.8x speedup on a typical multicore box even in pure-Python wrappers. Combined with the disk cache:
 
-| Scenario | Old | New |
-|---|---|---|
-| First-ever cold load (empty disk cache, sequential) | ~440 s | (no longer happens) |
-| Cold load (4 workers, empty disk cache) | n/a | **~240 s** |
-| Cold-after-sleep load (4 workers, disk cache hit) | ~440 s | **~0.2 s** |
-| Within-session navigation (memory cache hit) | instant | instant |
+| Scenario | Time |
+|---|---|
+| First-ever cold load (4 workers, empty disk cache) | ~240 s |
+| Cold-after-sleep / new session (bundled disk cache) | **~0.2 s** |
+| Within-session navigation (memory cache hit) | instant |
+
+### Bundled pipeline cache
+
+On Streamlit Community Cloud's free tier, the running container's filesystem is wiped on sleep/wake AND on every redeploy. Without intervention, the disk cache is empty after every such event and the user pays the full cold-compute cost.
+
+To work around this, `scripts/refresh_pipeline_cache.py` runs `analyse_one()` for every watchlist symbol (vanilla settings) and writes the pickles to `data_cache/pipeline/*.pkl`, which are **committed to the repo** alongside `data_cache/*.parquet`. The nightly GitHub Action (`.github/workflows/refresh-cache.yml`) regenerates both. Since the bundle ships with each deploy, Streamlit Cloud cold-starts land with a fully-warm pipeline cache and the very first user visit is ~0.2 sec.
+
+Safety:
+- Each pickle includes a `CACHE_VERSION` salt; if the live `analyse_one()` return-dict shape changes between when the bundle was built and when Streamlit Cloud loads it, the version mismatch is detected and the live app falls back to fresh compute (worst case: one slow load until the next nightly bundle).
+- The refresh script reads each pickle back after writing to verify it round-trips cleanly. Failures are recorded in `data_cache/PIPELINE_MANIFEST.json` and skipped from the bundle.
+- Only **vanilla** toggle combos are bundled (5 toggles × 32 combinations would bloat the bundle 32x); non-vanilla combos remain a per-user recompute.
+
+### `is_watchlist_warm()` semantics
+
+The home-page Today's Playbook needs to know whether to auto-load or show a "Compute now" button. `is_watchlist_warm()` returns `True` if EITHER:
+
+1. The current session has already triggered a successful `analyse_all` (session_state flag), OR
+2. The on-disk pipeline cache holds a fresh entry for every watchlist symbol at the requested (broker, toggle-combo).
+
+The disk-cache leg is critical on mobile: when iPad/Safari drops the WebSocket and the user reopens the app, they get a brand-new session with empty `session_state`. Without the disk-cache check, `is_watchlist_warm()` would return `False` on every visit and the user would see "Compute now" every time even though the data is sitting on disk.
 
 Output ordering is **always WATCHLIST order** regardless of which worker finishes first, so downstream UI rendering stays deterministic across reruns. Per-symbol exceptions are caught and packaged into the result dict (`{"error": "..."}`), so one bad ticker can't kill the whole run.
 
@@ -331,6 +350,7 @@ This split is what fixed the v1.3.1 "Streamlit Cloud shows 21 symbol(s) failed t
 | `tests/test_data_fallback.py` | Mocked yfinance | The stale-cache fallback contract: fresh-cache hit, stale-cache fallback when network fails, `allow_stale_fallback=False` propagation, fixture cleanup ordering |
 | `tests/test_pipeline_cache.py` | Synthetic data | Disk-persistent pipeline cache: save/load round-trip drops volatile fields, stale entries ignored, corrupt pickles auto-deleted, schema version mismatch ignored, different toggle combos and brokers get different cache slots, atomic writes via `.tmp` rename, `clear_pipeline_cache()` |
 | `tests/test_parallel_pipeline.py` | Mocked `analyse_one` | Parallel `analyse_all`: output preserves WATCHLIST order despite out-of-order completion, `max_workers=1` falls back to sequential, per-symbol exceptions don't kill the run, disk-cache hit short-circuits the heavy backtest path |
+| `tests/test_warm_check.py` | Synthetic pickles | `is_watchlist_warm()` returns True from disk cache alone when session_state is empty (the iPad regression), False when even one symbol is missing, isolates per-broker, never crashes when cache dir is removed mid-flight |
 | `tests/test_pipeline_smoke.py` | Static + headless pipeline | Two layers: (1) every page in `pages/` is `py_compile`-checked and AST-walked for unresolvable imports; (2) `analyse_one()` is called on MSFT and BHP.AX across every toggle combination, and `analyse_all()` is called on the full watchlist with `enh=all_off()`. Catches schema-drift regressions like the Tier-3 `Enhancements` `TypeError`. |
 | `tests/test_live.py` | Real yfinance data | MSFT and BHP.AX through the full pipeline (optional, network-dependent) |
 

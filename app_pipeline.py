@@ -31,7 +31,7 @@ from core.forecast_weighted import RecencyWeights, recency_weighted_forecast
 from core.fx import normalise_to_aud
 from core.hold_window import upcoming_window
 from core.macro import macro_blocks_go, macro_snapshot
-from core.pipeline_cache import load_cached, save_cached
+from core.pipeline_cache import cache_status, load_cached, save_cached
 from core.regime import detect_regime
 from core.regime_grade import stratified_grade
 from core.settings import Enhancements, all_off
@@ -264,15 +264,62 @@ def _enh_kwargs(enh: Enhancements) -> dict[str, Any]:
 
 
 def is_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) -> bool:
-    """Cheap check: has analyse_one been computed for every watchlist symbol?
+    """Cheap check: is the watchlist analysis available without a slow recompute?
 
-    Per-broker per-toggle-combo flag. Survives page navigation within the
-    same session, resets on restart.
+    Returns True if EITHER:
+      (a) this session has already triggered a successful analyse_all, OR
+      (b) the on-disk pipeline cache holds a fresh entry for every watchlist
+          symbol at the requested (broker, toggles) combo.
+
+    The disk-cache leg is critical on mobile: when iPad/Safari drops the
+    websocket and you reopen the app, you get a brand-new session with
+    empty session_state. Without the disk-cache check, you'd see "Compute
+    playbook now" on every visit even though the data is sitting right
+    there. With it, the page auto-loads from cache (~0.2 sec).
+
+    The session_state leg short-circuits the disk-stat overhead within a
+    single uptime period.
     """
     e = enh or all_off()
     # Note: Streamlit forbids session_state keys that start with underscore,
     # so the key uses a leading word.
-    return st.session_state.get(f"pipeline_warm__{broker}__{e.short_label()}", False)
+    if st.session_state.get(f"pipeline_warm__{broker}__{e.short_label()}", False):
+        return True
+    # Fall back to on-disk inspection. Cheap (just stat() + mtime per file).
+    try:
+        toggle_kwargs = {
+            "enh_garch": bool(getattr(e, "use_garch", False)),
+            "enh_macro": bool(getattr(e, "use_macro_confirm", False)),
+            "enh_regime_grade": bool(getattr(e, "use_regime_grade", False)),
+            "enh_recency_weighted": bool(getattr(e, "use_recency_weighted", False)),
+            "enh_drawdown_breaker": bool(getattr(e, "use_drawdown_breaker", False)),
+        }
+        symbols = [t.symbol for t in WATCHLIST]
+        status = cache_status(symbols, broker, toggle_kwargs)
+        return status["fresh"] == status["total"] and status["total"] > 0
+    except Exception:  # noqa: BLE001
+        # Disk inspection should never block UI rendering. Fall back to "cold".
+        return False
+
+
+def watchlist_cache_status(
+    broker: str = "Stake", enh: Enhancements | None = None,
+) -> dict[str, Any]:
+    """Public helper for the home-page diagnostic.
+
+    Returns the full cache_status() dict so the UI can show "21/21 fresh"
+    or "3 missing, 18 fresh" and similar.
+    """
+    e = enh or all_off()
+    toggle_kwargs = {
+        "enh_garch": bool(getattr(e, "use_garch", False)),
+        "enh_macro": bool(getattr(e, "use_macro_confirm", False)),
+        "enh_regime_grade": bool(getattr(e, "use_regime_grade", False)),
+        "enh_recency_weighted": bool(getattr(e, "use_recency_weighted", False)),
+        "enh_drawdown_breaker": bool(getattr(e, "use_drawdown_breaker", False)),
+    }
+    symbols = [t.symbol for t in WATCHLIST]
+    return cache_status(symbols, broker, toggle_kwargs)
 
 
 def mark_watchlist_warm(broker: str = "Stake", enh: Enhancements | None = None) -> None:

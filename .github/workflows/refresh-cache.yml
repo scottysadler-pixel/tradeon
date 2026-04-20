@@ -29,7 +29,10 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Step 1 (parquet refresh) historically took ~5 minutes. Step 2
+    # (pipeline cache rebuild) adds another ~6-10 minutes for 21 stocks
+    # × 12 folds. Allow 35 minutes total to give yfinance some headroom.
+    timeout-minutes: 35
 
     steps:
       - name: Check out repo
@@ -45,18 +48,29 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        # The cache refresh only needs yfinance + pandas + pyarrow;
-        # install the trimmed minimum so the action stays fast.
+        # Step 1 only needs yfinance + pandas + pyarrow.
+        # Step 2 (pipeline cache) ALSO needs the full forecasting stack
+        # (statsmodels, prophet, hmmlearn, streamlit, etc.) so we install
+        # from requirements.txt to mirror what the live app uses.
         run: |
           python -m pip install --upgrade pip
-          pip install "yfinance>=0.2.40" "pandas>=2.0" "pyarrow>=14"
+          pip install -r requirements.txt
 
-      - name: Refresh cache
+      - name: Refresh price cache (parquets)
         env:
           # 0 disables the freshness check inside fetch_history - the
           # script already passes force_refresh=True, this is belt+braces.
           TRADEON_CACHE_TTL_HOURS: "0"
         run: python scripts/refresh_cache.py
+
+      - name: Rebuild pipeline cache (pickles)
+        # Run analyse_one() for every watchlist symbol with vanilla
+        # settings. Output pickles land in data_cache/pipeline/ and ride
+        # the deploy, so Streamlit Cloud cold-starts with a fully-warm
+        # pipeline cache (first user visit ≈ 0.2 sec instead of ~5 min).
+        # Failures on individual symbols do not abort the run; the live
+        # app handles per-symbol misses gracefully.
+        run: python scripts/refresh_pipeline_cache.py
 
       - name: Commit and push refreshed cache
         run: |

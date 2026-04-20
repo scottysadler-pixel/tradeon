@@ -227,3 +227,49 @@ def clear_pipeline_cache() -> int:
         except Exception:  # noqa: BLE001
             pass
     return n
+
+
+def cache_status(
+    symbols: list[str],
+    broker: str,
+    toggles: dict[str, bool],
+    *,
+    ttl_hours: int = PIPELINE_CACHE_TTL_HOURS,
+) -> dict[str, Any]:
+    """Inspect disk-cache freshness for a list of symbols.
+
+    Returns a dict like:
+        {
+            "fresh":    14,                       # how many of len(symbols) are fresh
+            "stale":    5,                        # exist on disk but past TTL
+            "missing":  2,                        # never saved
+            "total":    21,
+            "fresh_symbols":   [...],             # for diagnostics
+            "missing_symbols": [...],
+        }
+
+    Used by:
+      - `app_pipeline.is_watchlist_warm()` — to detect a usable disk cache
+        across browser sessions.
+      - The home-page "Engine status" expander — to surface cache health
+        to the user so they understand why a load is fast or slow.
+    """
+    fresh, stale, missing = [], [], []
+    for sym in symbols:
+        path = CACHE_DIR / _key_to_filename(sym, broker, toggles)
+        if not path.exists():
+            missing.append(sym)
+        elif _is_fresh(path, ttl_hours=ttl_hours):
+            fresh.append(sym)
+        else:
+            stale.append(sym)
+    return {
+        "fresh": len(fresh),
+        "stale": len(stale),
+        "missing": len(missing),
+        "total": len(symbols),
+        "fresh_symbols": fresh,
+        "stale_symbols": stale,
+        "missing_symbols": missing,
+        "cache_dir": str(CACHE_DIR),
+    }

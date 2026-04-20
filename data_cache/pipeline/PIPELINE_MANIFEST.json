@@ -1,0 +1,165 @@
+{
+  "built_at_utc": "2026-04-20T07:31:48+00:00",
+  "cache_version": "v1",
+  "ttl_hours": 24,
+  "broker": "Stake",
+  "toggles": {
+    "enh_garch": false,
+    "enh_macro": false,
+    "enh_regime_grade": false,
+    "enh_recency_weighted": false,
+    "enh_drawdown_breaker": false
+  },
+  "elapsed_s": 258.3,
+  "ok_count": 21,
+  "fail_count": 0,
+  "entries": [
+    {
+      "symbol": "BHP.AX",
+      "ok": true,
+      "trust_grade": "C",
+      "signal": "WAIT",
+      "elapsed_s": 15.14
+    },
+    {
+      "symbol": "RIO.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 13.82
+    },
+    {
+      "symbol": "FMG.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 13.17
+    },
+    {
+      "symbol": "BSL.AX",
+      "ok": true,
+      "trust_grade": "C",
+      "signal": "WAIT",
+      "elapsed_s": 11.77
+    },
+    {
+      "symbol": "S32.AX",
+      "ok": true,
+      "trust_grade": "D",
+      "signal": "AVOID",
+      "elapsed_s": 10.4
+    },
+    {
+      "symbol": "CBA.AX",
+      "ok": true,
+      "trust_grade": "A",
+      "signal": "GO",
+      "elapsed_s": 12.82
+    },
+    {
+      "symbol": "WBC.AX",
+      "ok": true,
+      "trust_grade": "A",
+      "signal": "WAIT",
+      "elapsed_s": 15.06
+    },
+    {
+      "symbol": "NAB.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 12.64
+    },
+    {
+      "symbol": "ANZ.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "GO",
+      "elapsed_s": 14.27
+    },
+    {
+      "symbol": "MQG.AX",
+      "ok": true,
+      "trust_grade": "C",
+      "signal": "WAIT",
+      "elapsed_s": 12.88
+    },
+    {
+      "symbol": "WES.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "GO",
+      "elapsed_s": 13.62
+    },
+    {
+      "symbol": "WOW.AX",
+      "ok": true,
+      "trust_grade": "D",
+      "signal": "AVOID",
+      "elapsed_s": 12.96
+    },
+    {
+      "symbol": "COL.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "GO",
+      "elapsed_s": 6.04
+    },
+    {
+      "symbol": "TLS.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 12.44
+    },
+    {
+      "symbol": "CSL.AX",
+      "ok": true,
+      "trust_grade": "F",
+      "signal": "AVOID",
+      "elapsed_s": 12.89
+    },
+    {
+      "symbol": "MSFT",
+      "ok": true,
+      "trust_grade": "D",
+      "signal": "AVOID",
+      "elapsed_s": 11.49
+    },
+    {
+      "symbol": "AAPL",
+      "ok": true,
+      "trust_grade": "C",
+      "signal": "WAIT",
+      "elapsed_s": 10.83
+    },
+    {
+      "symbol": "AMZN",
+      "ok": true,
+      "trust_grade": "C",
+      "signal": "WAIT",
+      "elapsed_s": 11.42
+    },
+    {
+      "symbol": "GOOGL",
+      "ok": true,
+      "trust_grade": "D",
+      "signal": "AVOID",
+      "elapsed_s": 11.8
+    },
+    {
+      "symbol": "NVDA",
+      "ok": true,
+      "trust_grade": "A",
+      "signal": "WAIT",
+      "elapsed_s": 12.91
+    },
+    {
+      "symbol": "META",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 9.95
+    }
+  ]
+}

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app_pipeline import analyse_all, is_watchlist_warm
+from app_pipeline import analyse_all, is_watchlist_warm, watchlist_cache_status
 from core.forecast import PROPHET_AVAILABLE
 from core.playbook import build as build_playbook
 from core.settings import from_session as enh_from_session
@@ -49,10 +49,8 @@ _PLAYBOOK_BANNER_COLORS = {
     "info":  ("#3b82f6", "#ffffff"),
 }
 
-if is_watchlist_warm(broker, enh):
-    rows = analyse_all(broker=broker, enh=enh)
+def _render_playbook(rows):
     pb = build_playbook(rows)
-
     bg, fg = _PLAYBOOK_BANNER_COLORS.get(pb.headline.accent, ("#94a3b8", "#0b1220"))
     st.markdown(
         f"<div style='background:{bg};color:{fg};padding:14px 18px;"
@@ -76,12 +74,32 @@ if is_watchlist_warm(broker, enh):
         else:
             st.caption("No standout seasonal windows on the watchlist right now.")
     st.caption(f"Generated {pb.generated_at.strftime('%a %d %b %Y, %H:%M')}")
+
+
+# Auto-load when the disk cache is warm. is_watchlist_warm() now checks
+# both session_state AND the on-disk pipeline cache, so a fresh browser
+# session (e.g. iPad after switching apps) still picks up the cached
+# results in ~0.2 sec instead of showing "Compute now" pointlessly.
+if is_watchlist_warm(broker, enh):
+    with st.spinner("Loading playbook from cache..."):
+        rows = analyse_all(broker=broker, enh=enh)
+    _render_playbook(rows)
 else:
-    st.info(
-        "Today's playbook needs an analysis pass first. Click below or visit "
-        "the **Dashboard** to populate it. "
-        "First run takes 10-25 minutes; subsequent runs in this session are instant."
-    )
+    _status = watchlist_cache_status(broker, enh)
+    _missing = _status["missing"] + _status["stale"]
+    if _missing == _status["total"]:
+        _msg = (
+            "First-ever load: the system needs to compute 20 years of "
+            "backtests for each of the 21 watchlist stocks. **Roughly "
+            "3-5 minutes**, after which results are cached and every "
+            "subsequent visit is near-instant."
+        )
+    else:
+        _msg = (
+            f"{_missing} of {_status['total']} stocks need refreshing "
+            f"({_status['fresh']} already cached). Should take a minute or two."
+        )
+    st.info(_msg)
     if st.button("Compute playbook now", type="primary"):
         prog = st.progress(0.0, text="Crunching watchlist...")
         analyse_all(broker=broker, progress=prog, enh=enh)
@@ -142,5 +160,37 @@ with st.expander("Engine status"):
             "Community Cloud, Prophet installs automatically (Python 3.11 is pinned "
             "via runtime.txt)."
         )
+
+    st.markdown("---")
+    st.markdown("**Pipeline cache health**")
+    _cs = watchlist_cache_status(broker, enh)
+    _emoji = "OK" if _cs["fresh"] == _cs["total"] else "WARM" if _cs["fresh"] > 0 else "COLD"
+    st.write(
+        f"`{_emoji}`  **{_cs['fresh']}/{_cs['total']}** stocks fresh on disk  "
+        f"(stale: {_cs['stale']}, missing: {_cs['missing']})"
+    )
+    if _cs["fresh"] == _cs["total"]:
+        st.caption(
+            "All 21 stocks are cached on disk and fresh — every page in the "
+            "app will load in under a second. Cache auto-refreshes every "
+            "24 hours, or whenever the nightly GitHub Action redeploys."
+        )
+    elif _cs["missing"] == _cs["total"]:
+        st.caption(
+            "Disk cache is empty. This usually happens after a Streamlit Cloud "
+            "redeploy or a long sleep. The next analysis pass will populate it; "
+            "every subsequent visit (until the next deploy) will be instant. "
+            "On Streamlit Cloud, the bundled cache from the nightly GitHub "
+            "Action is normally already populated on deploy — if it's empty "
+            "here, the action may not have run yet for this commit."
+        )
+    else:
+        if _cs["missing_symbols"]:
+            st.caption(f"Missing: {', '.join(_cs['missing_symbols'][:8])}"
+                       + (" ..." if len(_cs["missing_symbols"]) > 8 else ""))
+        if _cs["stale_symbols"]:
+            st.caption(f"Stale (will refresh on next load): "
+                       f"{', '.join(_cs['stale_symbols'][:8])}"
+                       + (" ..." if len(_cs["stale_symbols"]) > 8 else ""))
 
 render_disclaimer()
