@@ -167,7 +167,7 @@ if "last_trade_added" in st.session_state:
             file_name=f"tradeon_{last_trade.ticker}_{last_trade.trade_id}.ics",
             mime="text/calendar",
             help="Download and open this file to add a reminder to your calendar app (Google Calendar, Apple Calendar, Outlook, etc.)",
-            use_container_width=True,
+            width="stretch",
         )
         st.caption(
             "💡 Tip: After downloading, open the .ics file. Your calendar app will import it automatically. "
@@ -332,7 +332,7 @@ else:
             "Notes": e.notes,
         })
     df_hist = pd.DataFrame(rows)
-    st.dataframe(df_hist, use_container_width=True, hide_index=True)
+    st.dataframe(df_hist, width="stretch", hide_index=True)
 
     with st.expander("Delete a trade"):
         del_pick = st.selectbox(
@@ -365,7 +365,7 @@ with bc1:
         data=csv_bytes,
         file_name=f"tradeon_journal_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
-        use_container_width=True,
+        width="stretch",
     )
 with bc2:
     uploaded = st.file_uploader("Restore from CSV", type="csv", key="journal_upload")

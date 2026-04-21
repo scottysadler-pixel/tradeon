@@ -87,7 +87,7 @@ data_status = data_cache_status()
 if data_status.empty:
     st.caption("No parquet cache files written yet.")
 else:
-    st.dataframe(data_status.sort_values("age_hours"), use_container_width=True, hide_index=True)
+    st.dataframe(data_status.sort_values("age_hours"), width="stretch", hide_index=True)
 
 st.caption(f"Backtest cache entries: {cache_count()}")
 st.caption(f"Pipeline cache directory: `{PIPELINE_CACHE_DIR}`")

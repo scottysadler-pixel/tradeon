@@ -29,7 +29,7 @@ df_wl = pd.DataFrame([{
     "Symbol": t.symbol, "Name": t.name, "Sector": t.sector,
     "Market": t.market, "Currency": t.currency,
 } for t in WATCHLIST])
-st.dataframe(df_wl, hide_index=True, use_container_width=True)
+st.dataframe(df_wl, hide_index=True, width="stretch")
 
 st.markdown("### Recommender (focus your attention)")
 st.caption(
@@ -68,14 +68,14 @@ for r in recs:
         "Grade": r.trust_grade, "Score": round(r.score, 1),
         "Reason": r.reason,
     })
-st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
 st.markdown("### Cache management")
 status = cache_status()
 if status.empty:
     st.caption("No cached data yet.")
 else:
-    st.dataframe(status, hide_index=True, use_container_width=True)
+    st.dataframe(status, hide_index=True, width="stretch")
 if st.button("Clear all cached data (will refetch on next load)"):
     n = clear_cache()
     st.success(f"Deleted {n} cached files.")

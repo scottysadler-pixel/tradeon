@@ -103,7 +103,7 @@ fig.update_layout(
     xaxis_title=None, yaxis_title="Price (AUD)",
     hovermode="x unified",
 )
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width="stretch")
 st.caption("Red shading = historically detected bear-regime periods.")
 
 # Stats row
@@ -138,7 +138,7 @@ else:
             "Worst case %": round(w.worst_case_pct, 2),
             "Years observed": w.n_years,
         })
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
 # Heatmap of all windows
 st.markdown("##### Hold-window heatmap (avg return %)")
@@ -151,7 +151,7 @@ if not matrix.empty:
         zmin=-15, zmax=15,
     )
     fig_hm.update_layout(height=380, margin=dict(l=10, r=10, t=20, b=10))
-    st.plotly_chart(fig_hm, use_container_width=True)
+    st.plotly_chart(fig_hm, width="stretch")
 
 st.markdown("---")
 
@@ -165,7 +165,7 @@ with qcol:
                    color_continuous_scale="RdYlGn", range_color=[30, 80])
     fig_q.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10),
                         yaxis_title="Avg return %")
-    st.plotly_chart(fig_q, use_container_width=True)
+    st.plotly_chart(fig_q, width="stretch")
 with mcol:
     st.markdown("**Monthly**")
     ms = monthly_seasonality(df)
@@ -173,7 +173,7 @@ with mcol:
                    color_continuous_scale="RdYlGn", range_color=[30, 80])
     fig_m.update_layout(height=300, margin=dict(l=10, r=10, t=10, b=10),
                         yaxis_title="Avg return %")
-    st.plotly_chart(fig_m, use_container_width=True)
+    st.plotly_chart(fig_m, width="stretch")
 
 eofy = eofy_tax_loss_pattern(df)
 if eofy:
@@ -222,7 +222,7 @@ for k, r in results.items():
         "Paper-trade gross %": round(r.paper_trade_total_return_pct, 1),
         "Paper-trade net AUD %": round(r.paper_trade_net_return_pct_aud, 1),
     })
-st.dataframe(pd.DataFrame(br_rows), hide_index=True, use_container_width=True)
+st.dataframe(pd.DataFrame(br_rows), hide_index=True, width="stretch")
 st.caption(grade.interpretation)
 
 render_disclaimer()

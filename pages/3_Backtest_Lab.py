@@ -138,11 +138,11 @@ if not sp.empty:
     fig.add_trace(go.Scatter(x=sp["fold_end"], y=sp["predicted_end"], mode="lines+markers", name="Predicted"))
     fig.update_layout(height=400, xaxis_title=None, yaxis_title="Price (AUD)",
                       hovermode="x unified", margin=dict(l=10, r=10, t=20, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     sp_display = sp.copy()
     sp_display["fold_end"] = pd.to_datetime(sp_display["fold_end"]).dt.strftime("%Y-%m-%d")
-    st.dataframe(sp_display, hide_index=True, use_container_width=True)
+    st.dataframe(sp_display, hide_index=True, width="stretch")
 else:
     st.warning("No fold data - try a longer history or a shorter horizon.")
 

@@ -195,7 +195,7 @@ for c in go_signals:
             line=dict(width=0), name="80% confidence",
         ))
         fig.update_layout(height=320, hovermode="x unified", margin=dict(l=10, r=10, t=10, b=10))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         size = size_suggest(capital_aud=capital, spot_price_aud=spot, df=c["df"])
 
@@ -281,13 +281,13 @@ for c in go_signals:
             link = broker_link(broker, t)
             link_cols = st.columns(2)
             with link_cols[0]:
-                st.link_button(link.label, link.url, use_container_width=True)
+                st.link_button(link.label, link.url, width="stretch")
                 st.caption(link.note)
             with link_cols[1]:
                 st.link_button(
                     "View chart on Yahoo Finance",
                     yahoo_chart_url(t),
-                    use_container_width=True,
+                    width="stretch",
                 )
                 st.caption("Independent sanity-check of price + recent news.")
 

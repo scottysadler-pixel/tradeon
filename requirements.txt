@@ -10,7 +10,7 @@
 # is missing, so everything still works.
 
 # Core data + UI
-streamlit>=1.36
+streamlit>=1.41
 pandas>=2.2
 numpy>=1.26
 plotly>=5.22

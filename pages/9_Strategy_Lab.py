@@ -278,7 +278,7 @@ if st.button("Run comparison: ON vs OFF", type="primary"):
                 ),
             })
 
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
         st.caption(
             "Trust score is the headline number to watch. A lift of >5 points is meaningful, "

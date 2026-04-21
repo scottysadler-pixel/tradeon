@@ -32,7 +32,7 @@ with guide_cols[0]:
             file_name="QUICK_START.md",
             mime="text/markdown",
             help="One-page guide: what each page does + daily workflow",
-            use_container_width=True,
+            width="stretch",
         )
 
 with guide_cols[1]:
@@ -43,7 +43,7 @@ with guide_cols[1]:
             file_name="BACKTEST_LAB_WALKTHROUGH.md",
             mime="text/markdown",
             help="Practice testing without risk - step-by-step examples",
-            use_container_width=True,
+            width="stretch",
         )
 
 with guide_cols[2]:
@@ -54,7 +54,7 @@ with guide_cols[2]:
             file_name="CALENDAR_FEATURE_GUIDE.md",
             mime="text/markdown",
             help="How to use trade exit reminders and upcoming exits panel",
-            use_container_width=True,
+            width="stretch",
         )
 
 with guide_cols[3]:
@@ -65,7 +65,7 @@ with guide_cols[3]:
             file_name="TRADEON_User_Guide.md",
             mime="text/markdown",
             help="Complete USER_GUIDE (673 lines) - save for offline reading",
-            use_container_width=True,
+            width="stretch",
         )
 
 st.divider()

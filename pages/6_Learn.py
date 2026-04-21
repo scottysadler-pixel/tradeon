@@ -37,7 +37,7 @@ with st.expander("📚 **Download topic-specific guides**", expanded=False):
                 file_name="QUICK_START.md",
                 mime="text/markdown",
                 help="One-page: what each page does + daily workflow",
-                use_container_width=True,
+                width="stretch",
             )
     
     with guide_cols[1]:
@@ -49,7 +49,7 @@ with st.expander("📚 **Download topic-specific guides**", expanded=False):
                 file_name="BACKTEST_LAB_WALKTHROUGH.md",
                 mime="text/markdown",
                 help="Practice testing without risk - 5 worked examples",
-                use_container_width=True,
+                width="stretch",
             )
     
     with guide_cols[2]:
@@ -61,7 +61,7 @@ with st.expander("📚 **Download topic-specific guides**", expanded=False):
                 file_name="CALENDAR_FEATURE_GUIDE.md",
                 mime="text/markdown",
                 help="Trade exit reminders + upcoming exits panel",
-                use_container_width=True,
+                width="stretch",
             )
     
     st.caption("💡 These guides are also in the Help page at the top, and in your project repo.")
