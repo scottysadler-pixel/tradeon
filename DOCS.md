@@ -25,7 +25,7 @@ TRADEON/
 ├── app.py                     ← Streamlit landing page
 ├── ui_helpers.py              ← Shared UI widgets, badges, formatters
 ├── pages/                     ← Multi-page Streamlit UI
-│   ├── 0_Data_Tools.py         ← Pre-warm cache + cache-pack actions
+│   ├── 0_Data_Tools.py         ← Pre-warm cache + portable cache-pack actions
 │   ├── 1_Dashboard.py         ← Watchlist overview + trust grades
 │   ├── 2_Deep_Dive.py         ← Single-stock 20-year analysis
 │   ├── 3_Backtest_Lab.py      ← Interactive prediction-vs-actual playground
@@ -291,7 +291,7 @@ Cache layers:
 | **Backtest Lab (memory)** | Streamlit memory (`@st.cache_data` on `cached_backtest`) | 1 hour | Within-session: instant when you flip back to the same symbol/model/horizon/fold-cap. |
 | **Backtest Lab (disk)** | `data_cache/backtest/*.pkl` (gitignored; per-deploy) | 7 days (configurable via `$TRADEON_BACKTEST_CACHE_TTL_HOURS`) | Same combo across sessions while the container lives; survives browser close. Wiped on redeploy like other runtime caches — not bundled (combo space too large). Override dir: `$TRADEON_BACKTEST_CACHE_DIR`. Schema-versioned in `core/backtest_cache.py`. |
 
-| **Portable cache pack (optional)** | `tradeon_cache_pack.zip` (Data Tools export/import) | Snapshot time + manifest metadata; user-managed | Move warm cache state between sessions/devices. Every import is validated before restore (schema version, SHA-256 checks, entry age, stale entries allowed with warning). |
+| **Portable cache pack (optional)** | `tradeon_cache_pack.zip` (Data Tools export/import) | Snapshot time + manifest metadata; user-managed | Move warm cache state between sessions/devices. Every import is validated before restore (schema version, SHA-256 checks, entry age, stale entries allowed with warning). All build/download/apply controls are in **Data Tools** only. |
 
 `core/data.py:_resolve_cache_dir` chooses a writable directory in this order:
 1. `$TRADEON_CACHE_DIR` env var if set
@@ -309,6 +309,7 @@ For weakest-power sessions (or a fresh browser session after app sleep), use `pa
 1. **Pre-warm raw price cache now**: fetches/parses all watchlist `yfinance` parquet files into `data_cache/`.
 2. **Pre-compute watchlist analysis now**: runs `analyse_all()` once to populate on-disk pipeline cache and session-ready cache metadata.
 3. **Cache pack build/import**: optional zip export/import to quickly seed another session/device.
+   - Use these controls only in Data Tools. Home and other pages remain focused on viewing signals.
 
 The page also exposes cache lifecycle controls and shows current cache freshness at a glance (fresh / stale / missing counts).
 

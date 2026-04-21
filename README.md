@@ -52,11 +52,13 @@ The app opens in your browser at <http://localhost:8501>.
 For repeatable iPad / tablet starts, do a one-time warm pass:
 
 1. Open **Data Tools**.
-2. Enable **Mobile speed profile** if needed (iPad-first defaults).
+2. Open the **Mobile speed profile** section (in the app sidebar), enable it only if you want lower CPU use.
 3. Click **Pre-warm raw price cache now**.
 4. Click **Pre-compute watchlist analysis now**.
 
 After that warm pass, page transitions are much faster because Dashboard and Forward Outlook render cached rows immediately.
+Data Tools is also where you build, validate, download, and import cache packs.
+Cache-pack controls are no longer shown in the home sidebar.
 
 ## Project layout
 

@@ -349,6 +349,44 @@ st.markdown("---")
 
 with st.expander("Engine status"):
     import sys
+    import subprocess
+    
+    # Get current version
+    try:
+        current_version = subprocess.run(
+            ["git", "describe", "--tags", "--always"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        ).stdout.strip()
+        if not current_version:
+            current_version = "unknown"
+    except Exception:
+        current_version = "unknown"
+    
+    # Check for updates
+    update_status = ""
+    try:
+        # Fetch latest tags (silent)
+        subprocess.run(["git", "fetch", "--tags"], capture_output=True, timeout=3)
+        # Get latest tag from remote
+        latest_tag = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0", "origin/main"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        ).stdout.strip()
+        
+        if latest_tag and latest_tag != current_version:
+            update_status = f" ⚠️ Update available: {latest_tag}"
+        elif latest_tag:
+            update_status = " ✓ Up to date"
+    except Exception:
+        pass  # Silently skip if git fetch fails (e.g., no internet)
+    
+    st.write(f"**Version:** {current_version}{update_status}")
+    if "Update available" in update_status:
+        st.caption("💡 To update: `git pull origin main` in your terminal")
     st.write(f"**Python:** {sys.version.split()[0]}")
     st.write(f"**Prophet available:** {'Yes' if PROPHET_AVAILABLE else 'No (fallback to Holt-Winters + ARIMA)'}")
     st.write(f"**Watchlist size:** {len(WATCHLIST)} stocks")
