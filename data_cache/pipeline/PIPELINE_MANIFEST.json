@@ -1,7 +1,7 @@
 {
-  "built_at_utc": "2026-04-20T20:47:25+00:00",
+  "built_at_utc": "2026-04-21T07:58:39+00:00",
   "cache_version": "v1",
-  "ttl_hours": 24,
+  "ttl_hours": 96,
   "broker": "Stake",
   "toggles": {
     "enh_garch": false,
@@ -10,8 +10,8 @@
     "enh_recency_weighted": false,
     "enh_drawdown_breaker": false
   },
-  "elapsed_s": 0.5,
-  "ok_count": 21,
+  "elapsed_s": 244.9,
+  "ok_count": 27,
   "fail_count": 0,
   "entries": [
     {
@@ -19,147 +19,189 @@
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 0.03
+      "elapsed_s": 14.7
     },
     {
       "symbol": "RIO.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 14.23
     },
     {
       "symbol": "FMG.AX",
       "ok": true,
-      "trust_grade": "B",
+      "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 0.04
+      "elapsed_s": 14.14
     },
     {
       "symbol": "BSL.AX",
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 12.52
     },
     {
       "symbol": "S32.AX",
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 0.04
+      "elapsed_s": 9.48
     },
     {
       "symbol": "CBA.AX",
       "ok": true,
       "trust_grade": "A",
       "signal": "GO",
-      "elapsed_s": 0.01
+      "elapsed_s": 13.19
     },
     {
       "symbol": "WBC.AX",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.04
+      "elapsed_s": 12.39
     },
     {
       "symbol": "NAB.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.11
+      "elapsed_s": 12.92
     },
     {
       "symbol": "ANZ.AX",
       "ok": true,
-      "trust_grade": "B",
+      "trust_grade": "A",
       "signal": "GO",
-      "elapsed_s": 0.05
+      "elapsed_s": 12.69
     },
     {
       "symbol": "MQG.AX",
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 12.37
     },
     {
       "symbol": "WES.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "GO",
-      "elapsed_s": 0.0
+      "elapsed_s": 12.29
     },
     {
       "symbol": "WOW.AX",
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 0.0
+      "elapsed_s": 12.34
     },
     {
       "symbol": "COL.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "GO",
-      "elapsed_s": 0.0
+      "elapsed_s": 5.84
     },
     {
       "symbol": "TLS.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.0
+      "elapsed_s": 10.81
     },
     {
       "symbol": "CSL.AX",
       "ok": true,
       "trust_grade": "F",
       "signal": "AVOID",
-      "elapsed_s": 0.0
+      "elapsed_s": 12.2
+    },
+    {
+      "symbol": "IAG.AX",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 0.01
+    },
+    {
+      "symbol": "ASX.AX",
+      "ok": true,
+      "trust_grade": "F",
+      "signal": "AVOID",
+      "elapsed_s": 0.01
+    },
+    {
+      "symbol": "ALL.AX",
+      "ok": true,
+      "trust_grade": "D",
+      "signal": "AVOID",
+      "elapsed_s": 0.01
     },
     {
       "symbol": "MSFT",
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 0.02
+      "elapsed_s": 11.14
     },
     {
       "symbol": "AAPL",
       "ok": true,
-      "trust_grade": "C",
+      "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 10.0
     },
     {
       "symbol": "AMZN",
       "ok": true,
-      "trust_grade": "C",
+      "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 10.34
     },
     {
       "symbol": "GOOGL",
       "ok": true,
-      "trust_grade": "D",
-      "signal": "AVOID",
-      "elapsed_s": 0.02
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 10.69
     },
     {
       "symbol": "NVDA",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 11.6
     },
     {
       "symbol": "META",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
+      "elapsed_s": 8.9
+    },
+    {
+      "symbol": "JPM",
+      "ok": true,
+      "trust_grade": "A",
+      "signal": "WAIT",
+      "elapsed_s": 0.05
+    },
+    {
+      "symbol": "WMT",
+      "ok": true,
+      "trust_grade": "A",
+      "signal": "WAIT",
       "elapsed_s": 0.02
+    },
+    {
+      "symbol": "JNJ",
+      "ok": true,
+      "trust_grade": "B",
+      "signal": "WAIT",
+      "elapsed_s": 0.03
     }
   ]
 }

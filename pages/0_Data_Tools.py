@@ -170,11 +170,15 @@ if st.session_state["cache_pack_consent"]:
             st.success("Cache pack ready.")
 
     if st.session_state.get("cache_pack_bytes"):
+        st.caption(
+            "Tip: on iPad/Safari, this downloads as a file attachment rather than "
+            "opening inline, so you can close the preview and return to TRADEON."
+        )
         st.download_button(
             "Download cache pack",
             data=st.session_state["cache_pack_bytes"],
             file_name="tradeon_cache_pack.zip",
-            mime="application/zip",
+            mime="application/octet-stream",
             help="Upload this file on another session to restore cache state.",
         )
         manifest = st.session_state.get("cache_pack_manifest", {})

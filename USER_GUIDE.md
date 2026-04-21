@@ -21,6 +21,7 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 6.6. [Recommended toggle starter packs](#66-recommended-toggle-starter-packs)
 6.7. [Reading the diagnostic captions on Forward Outlook](#67-reading-the-diagnostic-captions-on-forward-outlook)
 2.8. [Tablet-first first run: Data Tools workflow](#28-tablet-first-first-run-data-tools-workflow)
+2.9. [Adding new stocks to the watchlist](#29-adding-new-stocks-to-the-watchlist)
 7. [The trust grade in plain English](#7-the-trust-grade-in-plain-english)
 8. [Common questions](#8-common-questions)
 9. [What to do if something looks broken](#9-what-to-do-if-something-looks-broken)
@@ -30,7 +31,7 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 
 ## 1. What TRADEON does in one paragraph
 
-You give TRADEON a list of stocks you might want to trade (already configured: 15 ASX large caps and 6 US big-tech names). It downloads 20 years of daily prices for each one, runs five different statistical forecasting models, and grades itself on how accurate those models have been at predicting the recent past. Every now and then — usually no more than a few times a quarter — several signals line up at once on a particular stock and TRADEON issues a short-to-medium-term **GO** signal with a suggested entry window, exit date, stop-loss level, and expected after-fee, after-tax AUD return. Most days, on most stocks, TRADEON simply says **WAIT**. That is the correct default behaviour.
+You give TRADEON a list of stocks you might want to trade (already configured: 18 ASX large caps and 9 US names). It downloads 20 years of daily prices for each one, runs five different statistical forecasting models, and grades itself on how accurate those models have been at predicting the recent past. Every now and then — usually no more than a few times a quarter — several signals line up at once on a particular stock and TRADEON issues a short-to-medium-term **GO** signal with a suggested entry window, exit date, stop-loss level, and expected after-fee, after-tax AUD return. Most days, on most stocks, TRADEON simply says **WAIT**. That is the correct default behaviour.
 
 You can also turn on up to **five opt-in enhancements** in the Strategy Lab page — they let you stress-test the system, sharpen the forecasts, or add safety filters. They all default to OFF so you always have the v1 baseline to compare against.
 
@@ -152,9 +153,9 @@ These settings persist across pages while the app stays open.
 
 Click **Dashboard** in the left navigation.
 
-The first time you do this, the system has work to do — it loads 20 years of data for 21 stocks and runs walk-forward backtests on each.
+The first time you do this, the system has work to do — it loads 20 years of data for 27 stocks and runs walk-forward backtests on each.
 
-- **First-ever load on a fresh deploy:** roughly **3-5 minutes**. The 21 stocks are processed in parallel across 4 worker threads, but the underlying backtest work still has to happen once. Make a coffee.
+- **First-ever load on a fresh deploy:** roughly **3-5 minutes**. The 27 symbols are processed in parallel across 4 worker threads, but the underlying backtest work still has to happen once. Make a coffee.
 - **Cold load after the app went to sleep / new browser session:** **a few seconds**. The pipeline cache is committed to the repo and refreshed nightly by a GitHub Action, so every cold load on Streamlit Cloud reads from the bundled pickles instead of recomputing.
 - **Subsequent visits within the same session:** instant (results are cached in memory).
 - **If the bundled price cache is missing or stale**, the first load can take 10-25 minutes because Streamlit has to refetch every symbol from yfinance. This should happen rarely — the nightly GitHub Action refreshes the bundled cache every weekday morning.
@@ -226,7 +227,7 @@ Once the Dashboard has been run at least once in your current browser session, t
 The panel has three parts:
 
 - **Headline banner** (green/grey/red) — the single best GO opportunity right now, OR a friendly "no GO signals, sit tight" with a runner-up to keep an eye on.
-- **Watchlist mood** — bull / bear / sideways count across all 21 stocks. If more than half are in bear, it explicitly tells you the market is defensive and GO signals will be sparse.
+- **Watchlist mood** — bull / bear / sideways count across all 27 symbols. If more than half are in bear, it explicitly tells you the market is defensive and GO signals will be sparse.
 - **One to watch** — the most promising currently-active seasonal hold-window that hasn't quite triggered a full GO yet. A "watch this in case other conditions line up" pointer.
 
 If you land on the home page before the Dashboard has run in this session, you'll see a "Compute playbook now" button instead — it triggers the same heavy first-load work the Dashboard does.
@@ -239,7 +240,10 @@ If your biggest pain point is page switching on iPad, use this flow once per new
 2. Turn on **Mobile speed profile** if you want lower CPU usage while warming.
 3. Click **Pre-warm raw price cache now**.
 4. Click **Pre-compute watchlist analysis now**.
-5. (Optional) click **Build cache pack** to save a portable, validated zip you can import on another session.
+5. (Optional) use **Build/Import cache pack** to save a portable, validated zip for another session.
+6. On iPad/Safari, the cache-pack zip opens as a file attachment. Close the preview to return to the app, then restore/import when needed on a different session/device.
+
+All cache-pack actions now live in the **Data Tools** page only. Home page and other pages now just consume cache and show freshness.
 
 Why this works:
 
@@ -247,6 +251,18 @@ Why this works:
 - The second step ensures the watchlist pipeline and per-stock analysis are on disk.
 - Dashboard and Forward Outlook can then render many rows from cache immediately.
 - If you are on a different device later, you can import the cache pack first and then open pages.
+
+## 2.9 Adding new stocks to the watchlist
+
+If you want to grow the default watchlist:
+
+1. Edit `core/tickers.py`.
+2. Add each new symbol as a `Ticker("SYMBOL", "Name", "Sector", "Market", "Currency")`.
+3. Run `python scripts/refresh_cache.py`.
+4. Run `python scripts/refresh_pipeline_cache.py`.
+5. Commit the changed cache files along with `core/tickers.py`.
+
+This is important: the live app reads bundled cache files on startup, so adding symbols without refresh means new symbols will appear without usable historical analysis until the next warm pass.
 
 ## 3. Reading the Dashboard
 
@@ -621,12 +637,12 @@ A: TRADEON doesn't store any personal data. The only thing that travels is OHLCV
 | "Oh no" generic error page | Check the build logs in Streamlit Cloud → "Manage app" |
 | Dashboard hangs >30 minutes on first load | Cancel and reload; Streamlit Cloud may have throttled. Try off-peak hours. |
 | A specific stock shows no data | Yahoo may have changed its symbol. Edit `core/tickers.py` to remove or update it. |
-| "**21 of 21 symbols failed to load**" or similar | Yahoo Finance is rate-limiting your cloud host. As of v1.3.1 the app should auto-fall-back to the on-disk cache and keep working with slightly-stale prices (you'll see a `using stale cache` warning in the logs). If it doesn't, the bundled `data_cache/*.parquet` files probably got out of sync with `core/tickers.py` — wait for the next nightly refresh action to run, or trigger it manually from GitHub Actions → "Refresh price cache" → Run workflow. |
+| "**27 of 27 symbols failed to load**" or similar | Yahoo Finance is rate-limiting your cloud host. As of v1.3.1 the app should auto-fall-back to the on-disk cache and keep working with slightly-stale prices (you'll see a `using stale cache` warning in the logs). If it doesn't, the bundled `data_cache/*.parquet` files probably got out of sync with `core/tickers.py` — wait for the next nightly refresh action to run, or trigger it manually from GitHub Actions → "Refresh price cache" → Run workflow. |
 | Dashboard data feels old | Cache TTL is 14 days (intentionally generous so brief outages don't cascade). Click **Refresh all** at the top of the Dashboard to force a re-fetch. Or wait — the GitHub Action refreshes the bundled cache every weekday morning. |
 | iPad / tablet feels unusably slow on navigation | Open **Data Tools** first and run the warm-up steps (raw cache + pre-compute). This keeps Dashboard/Outlook in cache-first mode for subsequent navigation. |
 | Trust grade dropped sharply | Recent market shock — this is the system reacting honestly. Wait a few weeks for it to stabilise. |
 | Cloud app is slow to wake | Free tier sleeps after 7 days idle. First visit takes ~30 sec to wake. |
-| App keeps saying "compute playbook now", restarts every minute, never finishes (the old iPad bug) | Should be impossible as of v1.5 — the file watcher now ignores `data_cache/`. If you see it again, something is rewriting files inside the project directory other than the cache. Check `Engine status → Pipeline cache health` on the home page; if it shows < 21 fresh symbols, hit **Compute playbook now** once and let it finish. |
+| App keeps saying "compute playbook now", restarts every minute, never finishes (the old iPad bug) | Should be impossible as of v1.5 — the file watcher now ignores `data_cache/`. If you see it again, something is rewriting files inside the project directory other than the cache. Check `Engine status → Pipeline cache health` on the home page; if it shows < 27 fresh symbols, hit **Compute playbook now** once and let it finish. |
 | Want it to be much faster | Run locally — see [LOCAL_RUN.md](LOCAL_RUN.md). 10× the worker CPU and the disk cache never gets wiped. |
 | Local app won't start | Activate the venv (`.\.venv\Scripts\Activate.ps1`) then `streamlit run app.py` |
 | Strategy Lab error like `Enhancements got an unexpected keyword argument` | Schema drift after a deploy. Click the **"Clear cached settings + cache"** button at the top of the Strategy Lab page — it rebuilds the settings object and clears the pipeline cache. |

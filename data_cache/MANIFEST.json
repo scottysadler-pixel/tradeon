@@ -1,197 +1,251 @@
 {
-  "built_at_utc": "2026-04-20T20:47:22+00:00",
-  "elapsed_s": 19.6,
-  "ok_count": 25,
+  "built_at_utc": "2026-04-21T07:54:30+00:00",
+  "elapsed_s": 27.3,
+  "ok_count": 31,
   "fail_count": 0,
   "entries": [
     {
       "symbol": "BHP.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.82
+      "elapsed_s": 1.06
     },
     {
       "symbol": "RIO.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.59
+      "elapsed_s": 0.44
     },
     {
       "symbol": "FMG.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.36
+      "elapsed_s": 0.45
     },
     {
       "symbol": "BSL.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.5
+      "elapsed_s": 0.74
     },
     {
       "symbol": "S32.AX",
       "ok": true,
-      "rows": 2765,
+      "rows": 2766,
       "first_date": "2015-05-18",
-      "last_date": "2026-04-17",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.27
+      "elapsed_s": 0.3
     },
     {
       "symbol": "CBA.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.5
+      "elapsed_s": 0.55
     },
     {
       "symbol": "WBC.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.47
+      "elapsed_s": 0.74
     },
     {
       "symbol": "NAB.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.32
+      "elapsed_s": 0.57
     },
     {
       "symbol": "ANZ.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.58
+      "elapsed_s": 0.44
     },
     {
       "symbol": "MQG.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.36
+      "elapsed_s": 0.52
     },
     {
       "symbol": "WES.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.38
+      "elapsed_s": 0.42
     },
     {
       "symbol": "WOW.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.5
+      "elapsed_s": 0.36
     },
     {
       "symbol": "COL.AX",
       "ok": true,
-      "rows": 1872,
+      "rows": 1873,
       "first_date": "2018-11-21",
-      "last_date": "2026-04-17",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.21
+      "elapsed_s": 0.2
     },
     {
       "symbol": "TLS.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.32
+      "elapsed_s": 0.37
     },
     {
       "symbol": "CSL.AX",
       "ok": true,
       "rows": 5066,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.39
+      "elapsed_s": 0.53
+    },
+    {
+      "symbol": "IAG.AX",
+      "ok": true,
+      "rows": 5066,
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
+      "adjusted": true,
+      "elapsed_s": 0.55
+    },
+    {
+      "symbol": "ASX.AX",
+      "ok": true,
+      "rows": 5066,
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
+      "adjusted": true,
+      "elapsed_s": 0.37
+    },
+    {
+      "symbol": "ALL.AX",
+      "ok": true,
+      "rows": 5066,
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
+      "adjusted": true,
+      "elapsed_s": 0.57
     },
     {
       "symbol": "MSFT",
       "ok": true,
       "rows": 5040,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.27
+      "elapsed_s": 0.44
     },
     {
       "symbol": "AAPL",
       "ok": true,
       "rows": 5040,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.34
+      "elapsed_s": 0.56
     },
     {
       "symbol": "AMZN",
       "ok": true,
       "rows": 5040,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.29
+      "elapsed_s": 0.47
     },
     {
       "symbol": "GOOGL",
       "ok": true,
       "rows": 5040,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.34
+      "elapsed_s": 0.48
     },
     {
       "symbol": "NVDA",
       "ok": true,
       "rows": 5040,
-      "first_date": "2006-04-05",
-      "last_date": "2026-04-17",
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.38
+      "elapsed_s": 0.43
     },
     {
       "symbol": "META",
       "ok": true,
-      "rows": 3498,
+      "rows": 3499,
       "first_date": "2012-05-18",
-      "last_date": "2026-04-17",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.28
+      "elapsed_s": 0.38
+    },
+    {
+      "symbol": "JPM",
+      "ok": true,
+      "rows": 5040,
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
+      "adjusted": true,
+      "elapsed_s": 0.53
+    },
+    {
+      "symbol": "WMT",
+      "ok": true,
+      "rows": 5040,
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
+      "adjusted": true,
+      "elapsed_s": 0.46
+    },
+    {
+      "symbol": "JNJ",
+      "ok": true,
+      "rows": 5040,
+      "first_date": "2006-04-06",
+      "last_date": "2026-04-20",
+      "adjusted": true,
+      "elapsed_s": 0.64
     },
     {
       "symbol": "AUDUSD=X",
@@ -200,34 +254,34 @@
       "first_date": "2006-05-16",
       "last_date": "2026-04-20",
       "adjusted": false,
-      "elapsed_s": 0.48
+      "elapsed_s": 0.57
     },
     {
       "symbol": "^GSPC",
       "ok": true,
       "rows": 2519,
-      "first_date": "2016-04-12",
-      "last_date": "2026-04-17",
+      "first_date": "2016-04-13",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.24
+      "elapsed_s": 0.27
     },
     {
       "symbol": "^AXJO",
       "ok": true,
       "rows": 2533,
-      "first_date": "2016-04-12",
-      "last_date": "2026-04-17",
+      "first_date": "2016-04-13",
+      "last_date": "2026-04-20",
       "adjusted": true,
-      "elapsed_s": 0.17
+      "elapsed_s": 0.28
     },
     {
       "symbol": "^VIX",
       "ok": true,
-      "rows": 250,
+      "rows": 251,
       "first_date": "2025-04-21",
-      "last_date": "2026-04-17",
+      "last_date": "2026-04-20",
       "adjusted": false,
-      "elapsed_s": 0.2
+      "elapsed_s": 0.15
     }
   ]
 }

@@ -47,6 +47,10 @@ WATCHLIST: list[Ticker] = [
     # ASX other large-cap
     Ticker("TLS.AX",  "Telstra",                   "Communications","ASX",    "AUD"),
     Ticker("CSL.AX",  "CSL Limited",               "Healthcare",    "ASX",    "AUD"),
+    # Additional ASX watchlist candidates (screened for 20-year stability)
+    Ticker("IAG.AX",  "Insurance Australia Group",  "Financials",    "ASX",    "AUD"),
+    Ticker("ASX.AX",  "ASX Limited",               "Financials",    "ASX",    "AUD"),
+    Ticker("ALL.AX",  "Aristocrat Leisure",        "Consumer",      "ASX",    "AUD"),
     # US big-tech (proven pattern names)
     Ticker("MSFT",    "Microsoft",                 "Technology",    "NASDAQ", "USD"),
     Ticker("AAPL",    "Apple",                     "Technology",    "NASDAQ", "USD"),
@@ -54,6 +58,10 @@ WATCHLIST: list[Ticker] = [
     Ticker("GOOGL",   "Alphabet (Google)",         "Communications","NASDAQ", "USD"),
     Ticker("NVDA",    "NVIDIA",                    "Technology",    "NASDAQ", "USD"),
     Ticker("META",    "Meta Platforms",            "Communications","NASDAQ", "USD"),
+    # Additional US mega-caps
+    Ticker("JPM",     "JPMorgan Chase",            "Financials",    "NYSE",   "USD"),
+    Ticker("WMT",     "Walmart",                   "Consumer",      "NYSE",   "USD"),
+    Ticker("JNJ",     "Johnson & Johnson",         "Healthcare",    "NYSE",   "USD"),
 ]
 
 
