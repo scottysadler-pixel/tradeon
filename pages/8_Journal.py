@@ -27,6 +27,7 @@ from core.journal import (
     compute_outcome,
     delete_entry,
     export_csv,
+    generate_calendar_event,
     import_csv,
     load_journal,
     next_trade_id,
@@ -134,6 +135,47 @@ if entries:
 
     st.markdown("---")
 
+# ----- Calendar download for last added trade -----
+if "last_trade_added" in st.session_state:
+    last_trade = st.session_state["last_trade_added"]
+    st.info(
+        f"✅ Trade {last_trade.trade_id} - {last_trade.ticker} logged successfully. "
+        f"Add a calendar reminder below."
+    )
+    
+    col_cal1, col_cal2 = st.columns([3, 1])
+    with col_cal1:
+        # Ask for exit date if not set
+        suggested_exit = st.date_input(
+            "Suggested exit date",
+            value=date.today() if not last_trade.sell_date else last_trade.sell_date,
+            key="calendar_exit_date",
+            help="The date you plan to review/exit this trade. This will be your calendar reminder date.",
+        )
+    with col_cal2:
+        st.caption("")  # spacing
+        if st.button("Clear notification", type="secondary"):
+            del st.session_state["last_trade_added"]
+            st.rerun()
+    
+    # Generate ICS file
+    ics_content = generate_calendar_event(last_trade, exit_date=suggested_exit)
+    if ics_content:
+        st.download_button(
+            label="📅 Download calendar reminder (.ics)",
+            data=ics_content,
+            file_name=f"tradeon_{last_trade.ticker}_{last_trade.trade_id}.ics",
+            mime="text/calendar",
+            help="Download and open this file to add a reminder to your calendar app (Google Calendar, Apple Calendar, Outlook, etc.)",
+            use_container_width=True,
+        )
+        st.caption(
+            "💡 Tip: After downloading, open the .ics file. Your calendar app will import it automatically. "
+            "You'll get a notification on the exit date."
+        )
+    
+    st.markdown("---")
+
 # ----- Add new trade form -----
 st.markdown("### Log a new trade")
 
@@ -211,6 +253,10 @@ if mode == "Open new trade (buy)":
                     notes=notes,
                 )
                 add_entry(entry)
+                
+                # Store entry in session for calendar download
+                st.session_state["last_trade_added"] = entry
+                
                 st.success(f"Added trade {entry.trade_id} - {sym}.")
                 st.rerun()
             except Exception as e:  # noqa: BLE001

@@ -399,3 +399,72 @@ def next_trade_id() -> str:
     while f"T{n:04d}" in existing:
         n += 1
     return f"T{n:04d}"
+
+
+def generate_calendar_event(entry: JournalEntry, exit_date: date | None = None) -> str:
+    """Generate an ICS calendar file for a trade exit reminder.
+    
+    Args:
+        entry: The journal entry
+        exit_date: Suggested exit date. If None, uses entry.sell_date or skips.
+    
+    Returns:
+        ICS file content as a string
+    """
+    from datetime import timedelta
+    
+    # Determine exit date
+    target_date = exit_date or entry.sell_date
+    if not target_date:
+        # No exit date known, can't create calendar event
+        return ""
+    
+    # Create datetime objects (all-day event)
+    dt_start = target_date
+    dt_end = target_date + timedelta(days=1)
+    
+    # Format for ICS (YYYYMMDD)
+    start_str = dt_start.strftime("%Y%m%d")
+    end_str = dt_end.strftime("%Y%m%d")
+    
+    # Create reminder for 9 AM on the exit date
+    alarm_time = target_date.strftime("%Y%m%d") + "T090000"
+    
+    # Build event details
+    summary = f"TRADEON: Exit {entry.ticker}"
+    practice_tag = " (PRACTICE)" if entry.is_practice else ""
+    description = (
+        f"Trade exit reminder{practice_tag}\\n"
+        f"Ticker: {entry.ticker} ({entry.name})\\n"
+        f"Entry: {entry.buy_date.isoformat()} @ A${entry.buy_price_aud:.2f}\\n"
+        f"Shares: {entry.shares}\\n"
+        f"Capital: A${entry.capital_aud:.2f}\\n"
+        f"Trade ID: {entry.trade_id}\\n\\n"
+        f"Action: Review position and consider exiting.\\n"
+        f"Log exit in TRADEON Trade Journal."
+    )
+    
+    # Generate ICS content
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TRADEON//Trade Journal//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:{entry.trade_id}-{entry.buy_date.isoformat()}@tradeon.app
+DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}
+DTSTART;VALUE=DATE:{start_str}
+DTEND;VALUE=DATE:{end_str}
+SUMMARY:{summary}
+DESCRIPTION:{description}
+STATUS:CONFIRMED
+SEQUENCE:0
+BEGIN:VALARM
+TRIGGER;VALUE=DATE-TIME:{alarm_time}
+DESCRIPTION:Time to review {entry.ticker} exit
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR"""
+    
+    return ics_content

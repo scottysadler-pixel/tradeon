@@ -230,6 +230,84 @@ else:
         st.rerun()
 
 st.markdown("---")
+
+# ----- Upcoming Trade Exits -----
+from core.journal import load_journal
+from datetime import date, timedelta
+
+all_trades = load_journal()
+open_trades = [e for e in all_trades if e.is_open]
+
+if open_trades:
+    st.markdown("### 📅 Upcoming trade exits")
+    
+    # Get suggested exit dates from Forward Outlook or default to 90 days
+    # For now, we'll estimate exit as buy_date + 90 days if not logged in journal
+    # In a real scenario, this would read from Forward Outlook predictions
+    
+    upcoming = []
+    today = date.today()
+    for trade in open_trades:
+        # Estimate exit date as 90 days from buy (typical hold window)
+        estimated_exit = trade.buy_date + timedelta(days=90)
+        days_until = (estimated_exit - today).days
+        
+        if days_until <= 30:  # Show exits in next 30 days
+            upcoming.append({
+                "trade": trade,
+                "exit_date": estimated_exit,
+                "days_until": days_until,
+            })
+    
+    if upcoming:
+        # Sort by urgency (soonest first)
+        upcoming.sort(key=lambda x: x["days_until"])
+        
+        for item in upcoming[:5]:  # Show top 5 most urgent
+            trade = item["trade"]
+            days = item["days_until"]
+            exit_date = item["exit_date"]
+            
+            # Color coding
+            if days <= 0:
+                color = "#ef4444"  # Red - overdue
+                urgency = "⚠️ EXIT TODAY"
+            elif days == 1:
+                color = "#f97316"  # Orange
+                urgency = "⏰ Tomorrow"
+            elif days <= 3:
+                color = "#eab308"  # Yellow
+                urgency = f"📌 {days} days"
+            elif days <= 7:
+                color = "#22c55e"  # Green
+                urgency = f"✓ {days} days"
+            else:
+                color = "#3b82f6"  # Blue
+                urgency = f"{days} days"
+            
+            practice_tag = " 📝" if trade.is_practice else ""
+            
+            st.markdown(
+                f"<div style='background:{color}15;border-left:4px solid {color};"
+                f"padding:12px;margin-bottom:8px;border-radius:4px'>"
+                f"<div style='font-weight:600'>{trade.ticker}{practice_tag} - {urgency}</div>"
+                f"<div style='font-size:0.9em;margin-top:4px'>"
+                f"Exit: {exit_date.strftime('%a %d %b')} | "
+                f"Entry: A${trade.buy_price_aud:.2f} x {trade.shares} shares | "
+                f"Trade ID: {trade.trade_id}"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+        
+        if len(upcoming) > 5:
+            st.caption(f"+ {len(upcoming) - 5} more exits beyond 30 days")
+        
+        st.caption("💡 Exit dates estimated as 90 days from entry. Update in Trade Journal for custom dates.")
+    else:
+        st.info("No trades nearing exit in the next 30 days.")
+    
+    st.markdown("---")
+
 st.markdown("### Welcome")
 st.markdown(
     """
