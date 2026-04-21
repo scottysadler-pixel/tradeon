@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-04-21T07:58:39+00:00",
+  "built_at_utc": "2026-04-21T20:48:23+00:00",
   "cache_version": "v1",
   "ttl_hours": 96,
   "broker": "Stake",
@@ -10,7 +10,7 @@
     "enh_recency_weighted": false,
     "enh_drawdown_breaker": false
   },
-  "elapsed_s": 244.9,
+  "elapsed_s": 0.3,
   "ok_count": 27,
   "fail_count": 0,
   "entries": [
@@ -19,105 +19,105 @@
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 14.7
+      "elapsed_s": 0.02
     },
     {
       "symbol": "RIO.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 14.23
+      "elapsed_s": 0.01
     },
     {
       "symbol": "FMG.AX",
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 14.14
+      "elapsed_s": 0.01
     },
     {
       "symbol": "BSL.AX",
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 12.52
+      "elapsed_s": 0.01
     },
     {
       "symbol": "S32.AX",
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 9.48
+      "elapsed_s": 0.01
     },
     {
       "symbol": "CBA.AX",
       "ok": true,
       "trust_grade": "A",
       "signal": "GO",
-      "elapsed_s": 13.19
+      "elapsed_s": 0.01
     },
     {
       "symbol": "WBC.AX",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 12.39
+      "elapsed_s": 0.01
     },
     {
       "symbol": "NAB.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 12.92
+      "elapsed_s": 0.01
     },
     {
       "symbol": "ANZ.AX",
       "ok": true,
       "trust_grade": "A",
       "signal": "GO",
-      "elapsed_s": 12.69
+      "elapsed_s": 0.01
     },
     {
       "symbol": "MQG.AX",
       "ok": true,
       "trust_grade": "C",
       "signal": "WAIT",
-      "elapsed_s": 12.37
+      "elapsed_s": 0.01
     },
     {
       "symbol": "WES.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "GO",
-      "elapsed_s": 12.29
+      "elapsed_s": 0.01
     },
     {
       "symbol": "WOW.AX",
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 12.34
+      "elapsed_s": 0.01
     },
     {
       "symbol": "COL.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "GO",
-      "elapsed_s": 5.84
+      "elapsed_s": 0.01
     },
     {
       "symbol": "TLS.AX",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 10.81
+      "elapsed_s": 0.01
     },
     {
       "symbol": "CSL.AX",
       "ok": true,
       "trust_grade": "F",
       "signal": "AVOID",
-      "elapsed_s": 12.2
+      "elapsed_s": 0.01
     },
     {
       "symbol": "IAG.AX",
@@ -145,49 +145,49 @@
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 11.14
+      "elapsed_s": 0.02
     },
     {
       "symbol": "AAPL",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 10.0
+      "elapsed_s": 0.02
     },
     {
       "symbol": "AMZN",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 10.34
+      "elapsed_s": 0.02
     },
     {
       "symbol": "GOOGL",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 10.69
+      "elapsed_s": 0.02
     },
     {
       "symbol": "NVDA",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 11.6
+      "elapsed_s": 0.02
     },
     {
       "symbol": "META",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 8.9
+      "elapsed_s": 0.02
     },
     {
       "symbol": "JPM",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.05
+      "elapsed_s": 0.02
     },
     {
       "symbol": "WMT",
@@ -201,7 +201,7 @@
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.03
+      "elapsed_s": 0.02
     }
   ]
 }
