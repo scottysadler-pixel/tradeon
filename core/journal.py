@@ -47,6 +47,7 @@ COLUMNS = [
     "tradeon_predicted_pct",       # what TRADEON predicted at entry, if any
     "sell_date",                   # blank while open
     "sell_price_aud",              # blank while open
+    "is_practice",                 # "True" for paper trades, "False" for real
     "notes",
 ]
 
@@ -65,6 +66,7 @@ class JournalEntry:
     tradeon_predicted_pct: float | None = None
     sell_date: date | None = None
     sell_price_aud: float | None = None
+    is_practice: bool = False
     notes: str = ""
 
     @property
@@ -94,6 +96,7 @@ class JournalEntry:
             "sell_price_aud": (
                 f"{self.sell_price_aud:.4f}" if self.sell_price_aud is not None else ""
             ),
+            "is_practice": str(self.is_practice),
             "notes": self.notes,
         }
 
@@ -109,6 +112,12 @@ class JournalEntry:
                 return None
             return datetime.fromisoformat(str(v)).date()
 
+        def _parse_bool(v: Any) -> bool:
+            if isinstance(v, bool):
+                return v
+            s = str(v).strip().lower()
+            return s in ("true", "1", "yes")
+        
         return cls(
             trade_id=str(row["trade_id"]),
             ticker=str(row["ticker"]),
@@ -122,6 +131,7 @@ class JournalEntry:
             tradeon_predicted_pct=_opt_float(row.get("tradeon_predicted_pct")),
             sell_date=_opt_date(row.get("sell_date")),
             sell_price_aud=_opt_float(row.get("sell_price_aud")),
+            is_practice=_parse_bool(row.get("is_practice", "False")),
             notes=str(row.get("notes", "")),
         )
 

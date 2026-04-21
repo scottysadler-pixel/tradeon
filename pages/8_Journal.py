@@ -39,10 +39,23 @@ page_setup("Trade Journal")
 broker = st.session_state.get("broker", "Stake")
 
 st.markdown(
-    "Log trades you actually placed. The journal computes real net AUD "
-    "returns after fees + AU CGT, your personal hit rate, and how often "
-    "TRADEON's predictions matched what really happened."
+    "Log trades you actually placed OR practice trades for testing. The journal "
+    "computes real net AUD returns after fees + AU CGT, your personal hit rate, "
+    "and how often TRADEON's predictions matched what really happened."
 )
+
+# Practice mode toggle
+st.session_state.setdefault("journal_show_practice", False)
+col_mode1, col_mode2 = st.columns([3, 1])
+with col_mode1:
+    view_mode = st.radio(
+        "View mode",
+        ["Real trades only", "Practice trades only", "All trades"],
+        horizontal=True,
+        key="journal_view_mode",
+    )
+with col_mode2:
+    st.caption("")  # spacing
 
 if not JOURNAL_PATH.exists():
     st.info(
@@ -51,7 +64,16 @@ if not JOURNAL_PATH.exists():
     )
 
 # ----- Summary panel -----
-entries = load_journal()
+all_entries = load_journal()
+
+# Filter based on view mode
+if view_mode == "Real trades only":
+    entries = [e for e in all_entries if not e.is_practice]
+elif view_mode == "Practice trades only":
+    entries = [e for e in all_entries if e.is_practice]
+else:  # All trades
+    entries = all_entries
+
 if entries:
     summ = summarise(entries)
     st.markdown("### Your performance")
@@ -123,6 +145,13 @@ mode = st.radio(
 
 if mode == "Open new trade (buy)":
     with st.form("new_trade", clear_on_submit=True):
+        # Practice mode toggle
+        is_practice = st.checkbox(
+            "📝 Practice trade (paper trading - not real money)",
+            value=False,
+            help="Check this for practice/testing trades. Uncheck for real trades with actual money.",
+        )
+        
         c1, c2, c3 = st.columns(3)
         with c1:
             wl_symbols = [t.symbol for t in WATCHLIST]
@@ -178,6 +207,7 @@ if mode == "Open new trade (buy)":
                     shares=int(shares),
                     tradeon_signal_at_entry=sig_at_entry,
                     tradeon_predicted_pct=float(pred_pct) if use_pred else None,
+                    is_practice=is_practice,
                     notes=notes,
                 )
                 add_entry(entry)
@@ -187,7 +217,8 @@ if mode == "Open new trade (buy)":
                 st.error(f"Failed to add trade: {e}")
 
 else:
-    open_entries = [e for e in entries if e.is_open]
+    # When closing, show all open trades (both real and practice)
+    open_entries = [e for e in all_entries if e.is_open]
     if not open_entries:
         st.info("No open trades to close.")
     else:
@@ -195,7 +226,7 @@ else:
             c1, c2, c3 = st.columns(3)
             with c1:
                 tid_options = {
-                    f"{e.trade_id} - {e.ticker} ({e.shares} sh @ {aud(e.buy_price_aud)})": e.trade_id
+                    f"{'📝 ' if e.is_practice else ''}{e.trade_id} - {e.ticker} ({e.shares} sh @ {aud(e.buy_price_aud)})": e.trade_id
                     for e in open_entries
                 }
                 pick = st.selectbox("Open trade", list(tid_options.keys()))
@@ -236,6 +267,7 @@ else:
     for e in entries:
         out = compute_outcome(e)
         rows.append({
+            "Type": "📝 Practice" if e.is_practice else "💰 Real",
             "ID": e.trade_id,
             "Ticker": e.ticker,
             "Buy date": e.buy_date.isoformat(),
@@ -259,7 +291,7 @@ else:
     with st.expander("Delete a trade"):
         del_pick = st.selectbox(
             "Trade to delete",
-            [f"{e.trade_id} - {e.ticker} ({e.buy_date.isoformat()})" for e in entries],
+            [f"{'📝 ' if e.is_practice else ''}{e.trade_id} - {e.ticker} ({e.buy_date.isoformat()})" for e in all_entries],
             key="delete_pick",
         )
         if st.button("Delete trade", type="secondary"):
