@@ -6,6 +6,7 @@ glossary that doubles as the source of every tooltip in the app.
 
 from __future__ import annotations
 
+from pathlib import Path
 import streamlit as st
 
 from core.costs import BROKERS
@@ -19,6 +20,53 @@ st.markdown(
     "Plain-English guides for getting started with share trading in Australia. "
     "Nothing here is financial advice - it's the practical mechanics."
 )
+
+# Quick links to downloadable guides
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+with st.expander("📚 **Download topic-specific guides**", expanded=False):
+    st.markdown("Quick reference guides you can save and read offline:")
+    
+    guide_cols = st.columns(3)
+    
+    with guide_cols[0]:
+        quick_start = PROJECT_ROOT / "QUICK_START.md"
+        if quick_start.exists():
+            st.download_button(
+                "🚀 Quick Start Guide",
+                data=quick_start.read_text(encoding="utf-8"),
+                file_name="QUICK_START.md",
+                mime="text/markdown",
+                help="One-page: what each page does + daily workflow",
+                use_container_width=True,
+            )
+    
+    with guide_cols[1]:
+        backtest_guide = PROJECT_ROOT / "BACKTEST_LAB_WALKTHROUGH.md"
+        if backtest_guide.exists():
+            st.download_button(
+                "🧪 Backtest Lab Guide",
+                data=backtest_guide.read_text(encoding="utf-8"),
+                file_name="BACKTEST_LAB_WALKTHROUGH.md",
+                mime="text/markdown",
+                help="Practice testing without risk - 5 worked examples",
+                use_container_width=True,
+            )
+    
+    with guide_cols[2]:
+        calendar_guide = PROJECT_ROOT / "CALENDAR_FEATURE_GUIDE.md"
+        if calendar_guide.exists():
+            st.download_button(
+                "📅 Calendar Guide",
+                data=calendar_guide.read_text(encoding="utf-8"),
+                file_name="CALENDAR_FEATURE_GUIDE.md",
+                mime="text/markdown",
+                help="Trade exit reminders + upcoming exits panel",
+                use_container_width=True,
+            )
+    
+    st.caption("💡 These guides are also in the Help page at the top, and in your project repo.")
+
+st.divider()
 
 with st.expander("**How TRADEON works in 60 seconds (start here)**", expanded=False):
     st.markdown(

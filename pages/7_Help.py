@@ -13,31 +13,76 @@ from ui_helpers import page_setup, render_disclaimer
 
 page_setup("Help")
 
-GUIDE_PATH = Path(__file__).resolve().parent.parent / "USER_GUIDE.md"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+GUIDE_PATH = PROJECT_ROOT / "USER_GUIDE.md"
+QUICK_START_PATH = PROJECT_ROOT / "QUICK_START.md"
+BACKTEST_WALKTHROUGH_PATH = PROJECT_ROOT / "BACKTEST_LAB_WALKTHROUGH.md"
+CALENDAR_GUIDE_PATH = PROJECT_ROOT / "CALENDAR_FEATURE_GUIDE.md"
 
-st.caption(
-    "Plain-English user manual. To print: press Ctrl+P (Windows) or Cmd+P (Mac) "
-    "and choose 'Save as PDF' or send to your printer. The same content lives in "
-    "USER_GUIDE.md in the project repo."
-)
+st.markdown("### 📚 Documentation Library")
 
-c1, c2 = st.columns([1, 3])
-with c1:
-    st.download_button(
-        label="Download as Markdown",
-        data=GUIDE_PATH.read_text(encoding="utf-8") if GUIDE_PATH.exists() else "",
-        file_name="TRADEON_User_Guide.md",
-        mime="text/markdown",
-        disabled=not GUIDE_PATH.exists(),
-        help="Save a copy to your tablet or laptop for offline reading.",
-    )
-with c2:
-    st.markdown(
-        "Tip: bookmark this page on your tablet for one-tap access. "
-        "On iPad: share button -> 'Add to Home Screen'."
-    )
+# Quick access to all guides
+guide_cols = st.columns(4)
+
+with guide_cols[0]:
+    if QUICK_START_PATH.exists():
+        st.download_button(
+            "🚀 Quick Start",
+            data=QUICK_START_PATH.read_text(encoding="utf-8"),
+            file_name="QUICK_START.md",
+            mime="text/markdown",
+            help="One-page guide: what each page does + daily workflow",
+            use_container_width=True,
+        )
+
+with guide_cols[1]:
+    if BACKTEST_WALKTHROUGH_PATH.exists():
+        st.download_button(
+            "🧪 Backtest Lab",
+            data=BACKTEST_WALKTHROUGH_PATH.read_text(encoding="utf-8"),
+            file_name="BACKTEST_LAB_WALKTHROUGH.md",
+            mime="text/markdown",
+            help="Practice testing without risk - step-by-step examples",
+            use_container_width=True,
+        )
+
+with guide_cols[2]:
+    if CALENDAR_GUIDE_PATH.exists():
+        st.download_button(
+            "📅 Calendar",
+            data=CALENDAR_GUIDE_PATH.read_text(encoding="utf-8"),
+            file_name="CALENDAR_FEATURE_GUIDE.md",
+            mime="text/markdown",
+            help="How to use trade exit reminders and upcoming exits panel",
+            use_container_width=True,
+        )
+
+with guide_cols[3]:
+    if GUIDE_PATH.exists():
+        st.download_button(
+            "📖 Full Manual",
+            data=GUIDE_PATH.read_text(encoding="utf-8"),
+            file_name="TRADEON_User_Guide.md",
+            mime="text/markdown",
+            help="Complete USER_GUIDE (673 lines) - save for offline reading",
+            use_container_width=True,
+        )
 
 st.divider()
+
+st.caption(
+    "💡 The Full Manual is shown below. For quicker reference, download the Quick Start or "
+    "specific topic guides above."
+)
+
+st.markdown("---")
+st.markdown("### Complete User Guide")
+
+st.caption(
+    "To print: press Ctrl+P (Windows) or Cmd+P (Mac) "
+    "and choose 'Save as PDF' or send to your printer."
+)
+
 
 if GUIDE_PATH.exists():
     st.markdown(GUIDE_PATH.read_text(encoding="utf-8"))
