@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-04-23T20:48:23+00:00",
+  "built_at_utc": "2026-04-24T20:47:52+00:00",
   "cache_version": "v1",
   "ttl_hours": 96,
   "broker": "Stake",
@@ -96,7 +96,7 @@
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.0
     },
     {
       "symbol": "COL.AX",
@@ -166,42 +166,42 @@
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 0.01
     },
     {
       "symbol": "NVDA",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 0.01
     },
     {
       "symbol": "META",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 0.01
     },
     {
       "symbol": "JPM",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 0.01
     },
     {
       "symbol": "WMT",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 0.01
     },
     {
       "symbol": "JNJ",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.02
+      "elapsed_s": 0.01
     }
   ]
 }
