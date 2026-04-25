@@ -1,7 +1,7 @@
 """Speculation register - manually tracked hypothetical predictions.
 
 This page surfaces candidate ideas from TRADEON forecasts and lets the user
-manually create/close paper predictions for a fixed holding horizon (default 30 days).
+manually create/close paper predictions for a configurable holding horizon.
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ def _bundle_to_rows(bundle: CandidateBundle) -> pd.DataFrame:
             "Symbol": c.symbol,
             "Name": c.name,
             "Direction": c.expected_direction,
-            "Expected 30d %": f"{c.expected_return_pct_30d:+.2f}",
+            f"Expected in {c.horizon_days}d %": f"{c.expected_return_pct_30d:+.2f}",
             "Trust": c.trust_grade,
             "Score": f"{c.score:.2f}",
             "Current": f"{c.spot_aud:.2f}",
@@ -87,7 +87,10 @@ def _bundle_to_rows(bundle: CandidateBundle) -> pd.DataFrame:
 
 
 def _candidate_label(c: SpeculationCandidate) -> str:
-    return f"{c.symbol} {c.expected_direction} {c.expected_return_pct_30d:+.1f}% (trust {c.trust_grade})"
+    return (
+        f"{c.symbol} {c.expected_direction} ({c.horizon_days}d) "
+        f"{c.expected_return_pct_30d:+.1f}% (trust {c.trust_grade})"
+    )
 
 
 def _ticker_options() -> list[str]:

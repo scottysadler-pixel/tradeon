@@ -63,7 +63,7 @@ not match what forecast scores alone suggest.
 ## 6) Best practices
 
 - Keep this as a paper-only discipline until you trust your own judgment.
-- Prefer fixed-size testing cycles (example: always 30 days) for cleaner outcome comparisons.
+- Prefer fixed-size testing cycles (for example, 45–60 days) for cleaner outcome comparisons.
 - Don’t mix manual and auto-closure logic; the register is intentionally simple and explicit.
 
 ## 7) Troubleshooting

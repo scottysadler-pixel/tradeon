@@ -224,7 +224,7 @@ You're done with first-time setup.
 The **Speculation** tab is your hypothesis lab. It stays manual and deliberately
 does not execute any trades. It helps you test:
 
-- whether model-driven ideas are still plausible after a month,
+- whether model-driven ideas are still plausible over the horizon you select (often 30-90 days),
 - whether your intuition for LONG vs SHORT timing lines up with price direction,
 - and whether a short or long idea would still work after fees and tax.
 
