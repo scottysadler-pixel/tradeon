@@ -243,6 +243,13 @@ Important behaviors by design:
 - News/headline context is optional and loaded only when you enable it during a refresh.
 - No automatic re-trading, no auto-close, and no external broker integration.
   This is a tracking register by design.
+- If this page is empty when you first open it, click **Refresh candidate list (quick)**.
+
+Troubleshooting note:
+
+- If you run locally and see `"streamlit : The term 'streamlit' is not recognized..."`, activate
+  your virtual environment first (`.\.venv\Scripts\Activate.ps1`) or run
+  `python -m streamlit run app.py`.
 
 ---
 

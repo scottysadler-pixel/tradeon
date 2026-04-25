@@ -66,3 +66,37 @@ not match what forecast scores alone suggest.
 - Prefer fixed-size testing cycles (example: always 30 days) for cleaner outcome comparisons.
 - Don’t mix manual and auto-closure logic; the register is intentionally simple and explicit.
 
+## 7) Troubleshooting
+
+### Speculation list is empty
+
+That is normal first thing after opening the page.
+
+- Use **Refresh candidate list (quick)** or **Run full watchlist scan (21 stocks)**.
+- The list is not auto-updating; you control when it is regenerated.
+
+### `streamlit : The term 'streamlit' is not recognized`
+
+You need to run the app in an activated Python environment.
+
+```powershell
+cd C:\Users\Scotty\TRADEON
+.\.venv\Scripts\Activate.ps1
+streamlit run app.py
+```
+
+If `streamlit` is still unavailable, use:
+
+```powershell
+python -m streamlit run app.py
+```
+
+Other quick checks:
+
+- `app.py` is not directly executable as a PowerShell command; use `python app.py` for scripts.
+- If you run outside the repo folder, change into `C:\Users\Scotty\TRADEON` first.
+
+## 8) Record-keeping note
+
+If you decide not to use Speculation, that is fully supported. It does not affect other pages (Dashboard, Forward Outlook, Journal, Strategy Lab). Use it only when you want a manual hypothesis lab.
+
