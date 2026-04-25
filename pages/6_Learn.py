@@ -23,10 +23,11 @@ st.markdown(
 
 # Quick links to downloadable guides
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SPECULATION_GUIDE = PROJECT_ROOT / "SPECULATION_GUIDE.md"
 with st.expander("📚 **Download topic-specific guides**", expanded=False):
     st.markdown("Quick reference guides you can save and read offline:")
     
-    guide_cols = st.columns(3)
+    guide_cols = st.columns(4)
     
     with guide_cols[0]:
         quick_start = PROJECT_ROOT / "QUICK_START.md"
@@ -61,6 +62,17 @@ with st.expander("📚 **Download topic-specific guides**", expanded=False):
                 file_name="CALENDAR_FEATURE_GUIDE.md",
                 mime="text/markdown",
                 help="Trade exit reminders + upcoming exits panel",
+                width="stretch",
+            )
+
+    with guide_cols[3]:
+        if SPECULATION_GUIDE.exists():
+            st.download_button(
+                "🔮 Speculation Guide",
+                data=SPECULATION_GUIDE.read_text(encoding="utf-8"),
+                file_name="SPECULATION_GUIDE.md",
+                mime="text/markdown",
+                help="How to use manual hypothesis candidates and outcomes",
                 width="stretch",
             )
     

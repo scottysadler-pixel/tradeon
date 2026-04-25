@@ -18,11 +18,12 @@ GUIDE_PATH = PROJECT_ROOT / "USER_GUIDE.md"
 QUICK_START_PATH = PROJECT_ROOT / "QUICK_START.md"
 BACKTEST_WALKTHROUGH_PATH = PROJECT_ROOT / "BACKTEST_LAB_WALKTHROUGH.md"
 CALENDAR_GUIDE_PATH = PROJECT_ROOT / "CALENDAR_FEATURE_GUIDE.md"
+SPECULATION_GUIDE_PATH = PROJECT_ROOT / "SPECULATION_GUIDE.md"
 
 st.markdown("### 📚 Documentation Library")
 
 # Quick access to all guides
-guide_cols = st.columns(4)
+guide_cols = st.columns(5)
 
 with guide_cols[0]:
     if QUICK_START_PATH.exists():
@@ -58,6 +59,17 @@ with guide_cols[2]:
         )
 
 with guide_cols[3]:
+    if SPECULATION_GUIDE_PATH.exists():
+        st.download_button(
+            "🔮 Speculation",
+            data=SPECULATION_GUIDE_PATH.read_text(encoding="utf-8"),
+            file_name="SPECULATION_GUIDE.md",
+            mime="text/markdown",
+            help="Paper-only LONG/SHORT idea tracking workflow",
+            width="stretch",
+        )
+
+with guide_cols[4]:
     if GUIDE_PATH.exists():
         st.download_button(
             "📖 Full Manual",

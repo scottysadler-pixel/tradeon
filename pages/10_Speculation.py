@@ -39,6 +39,30 @@ st.markdown(
     "with manual close on the date you actually choose."
 )
 
+with st.expander("How the Speculation tab works", expanded=False):
+    st.markdown(
+        """
+        This tab is intentionally **manual-first**:
+
+        1. Click **Refresh candidate list (quick)** to build a fresh shortlist from the
+           current watchlist forecasts.
+        2. Review candidates and choose one to seed a paper prediction.
+        3. Use **Log a new paper prediction** to track that idea for the selected horizon.
+        4. When your plan time window ends, use **Close an open prediction** and enter exit price.
+        5. TRADEON calculates realised gain, fee impact, tax, and prediction error.
+
+        Why there are no actions after this:
+
+        - No auto-refresh: you decide when the candidate list is rebuilt.
+        - No auto-trading: no real orders are placed from this page.
+        - No auto-close: you decide when each hypothesis is closed.
+        """
+    )
+    st.caption(
+        "If you see an empty state on first open, it usually just means the candidates "
+        "haven't been generated in this session yet."
+    )
+
 st.session_state.setdefault("spec_bundle", None)
 st.session_state.setdefault("spec_last_refreshed", "")
 st.session_state.setdefault("spec_stale_minutes", 60)
