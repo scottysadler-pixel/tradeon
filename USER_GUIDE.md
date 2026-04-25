@@ -20,6 +20,7 @@ If something is unclear, every page in the app also has a **Learn** tab and a **
 6.5. [The Strategy Lab — toggling enhancements](#65-the-strategy-lab--toggling-enhancements)
 6.6. [Recommended toggle starter packs](#66-recommended-toggle-starter-packs)
 6.7. [Reading the diagnostic captions on Forward Outlook](#67-reading-the-diagnostic-captions-on-forward-outlook)
+6.8. [Speculation tab — manually track long and short ideas](#68-speculation-tab--manually-track-long-and-short-ideas)
 2.8. [Tablet-first first run: Data Tools workflow](#28-tablet-first-first-run-data-tools-workflow)
 2.9. [Adding new stocks to the watchlist](#29-adding-new-stocks-to-the-watchlist)
 7. [The trust grade in plain English](#7-the-trust-grade-in-plain-english)
@@ -217,6 +218,31 @@ If there IS a GO signal showing, scroll down to the "How to actually place this 
 - **Desktop:** bookmark the URL
 
 You're done with first-time setup.
+
+## 6.8 Speculation tab — manually track long and short ideas
+
+The **Speculation** tab is your hypothesis lab. It stays manual and deliberately
+does not execute any trades. It helps you test:
+
+- whether model-driven ideas are still plausible after a month,
+- whether your intuition for LONG vs SHORT timing lines up with price direction,
+- and whether a short or long idea would still work after fees and tax.
+
+How it works:
+
+1. Use **Refresh candidate list (quick)** to run only the top handful of watchlist
+   names and keep the page responsive.
+2. Use **Run full watchlist scan** if you want all 21 symbols.
+3. Add a LONG or SHORT prediction with your preferred capital size (defaults to 1,000 AUD).
+4. Manually close the idea on your chosen date/price.
+5. Review realised outcomes and prediction error in the register summary.
+
+Important behaviors by design:
+
+- Candidate refresh is manual only (no background/auto re-computation).
+- News/headline context is optional and loaded only when you enable it during a refresh.
+- No automatic re-trading, no auto-close, and no external broker integration.
+  This is a tracking register by design.
 
 ---
 

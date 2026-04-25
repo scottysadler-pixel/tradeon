@@ -18,6 +18,7 @@ Each item has:
 | **v1.1** | #1.1 Today's Playbook, #1.2 Trade Journal with self-grading, #1.3 broker deep-link, #1.4 clipboard order ticket, #1.5 "Why this signal?" explainer (in the Forward Outlook reasons expander), #2.4 FX vs stock attribution |
 | **v1.2** | Three Tier-2 enhancements as toggleable Strategy Lab features: GARCH(1,1) volatility forecast, cross-asset/macro confirmation, regime-stratified trust grade. Backtest fold-coverage fix (max_folds 60, prefer_recent). |
 | **v1.3** | Two Tier-3 enhancements: recency-weighted ensemble (`use_recency_weighted`), drawdown circuit-breaker (`use_drawdown_breaker`). Bundled price cache + nightly GitHub Action refresh (cold-start time 30-90s instead of 10-25min). USER_GUIDE rewritten with mental-model section + toggle starter packs + diagnostic-caption reading guide. |
+| **v1.4** | New **Speculation** tab (paper prediction register + manual long/short idea tracking) + optional free news context toggle. |
 
 The items below are all `BUILT` per the table above. They're kept here as the original specs / reasoning, in case you ever want to revisit how something was scoped.
 
@@ -111,6 +112,24 @@ Why: builds trust by making the black box transparent. Also catches your eye if 
 ---
 
 ## TIER 2 — Real value, slightly more thought required
+
+### 2.0 — Speculation register for manual long/short hypotheses (**BUILT (v1.4)**)
+
+Add a dedicated page that:
+
+1. Builds a manual shortlist from forecast direction + trust grade.
+2. Lets users log and manually close LONG/SHORT ideas (default 1,000 AUD style sizing).
+3. Computes realised outcomes with fees and AU CGT included.
+4. Keeps optional headline context explicit and opt-in.
+
+Why this feature:
+
+- Directly supports the "I want a one-month hypothesis lab" workflow before committing real capital.
+- Keeps execution outside the model so user judgment remains the control point.
+
+- **Effort:** 4-6 hours
+- **Risk:** Moderate, mainly added disk I/O and optional external headline fetches.
+- **Honest take:** Strongly recommend. This is exactly the right place for model-assisted hypothesis tracking.
 
 ### 2.1 — Signal-change email/push notifications (OPPORTUNITY)
 
