@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-04-27T20:49:40+00:00",
+  "built_at_utc": "2026-04-28T20:53:19+00:00",
   "cache_version": "v1",
   "ttl_hours": 96,
   "broker": "Stake",
@@ -10,7 +10,7 @@
     "enh_recency_weighted": false,
     "enh_drawdown_breaker": false
   },
-  "elapsed_s": 0.2,
+  "elapsed_s": 0.3,
   "ok_count": 27,
   "fail_count": 0,
   "entries": [
@@ -47,7 +47,7 @@
       "ok": true,
       "trust_grade": "D",
       "signal": "AVOID",
-      "elapsed_s": 0.0
+      "elapsed_s": 0.01
     },
     {
       "symbol": "CBA.AX",
@@ -103,7 +103,7 @@
       "ok": true,
       "trust_grade": "B",
       "signal": "GO",
-      "elapsed_s": 0.0
+      "elapsed_s": 0.01
     },
     {
       "symbol": "TLS.AX",
@@ -131,7 +131,7 @@
       "ok": true,
       "trust_grade": "F",
       "signal": "AVOID",
-      "elapsed_s": 0.0
+      "elapsed_s": 0.01
     },
     {
       "symbol": "ALL.AX",
@@ -152,7 +152,7 @@
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     },
     {
       "symbol": "AMZN",
@@ -166,14 +166,14 @@
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     },
     {
       "symbol": "NVDA",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     },
     {
       "symbol": "META",
@@ -187,21 +187,21 @@
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     },
     {
       "symbol": "WMT",
       "ok": true,
       "trust_grade": "A",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     },
     {
       "symbol": "JNJ",
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     }
   ]
 }
