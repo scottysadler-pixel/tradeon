@@ -1,5 +1,5 @@
 {
-  "built_at_utc": "2026-04-28T20:53:19+00:00",
+  "built_at_utc": "2026-04-29T20:49:58+00:00",
   "cache_version": "v1",
   "ttl_hours": 96,
   "broker": "Stake",
@@ -180,7 +180,7 @@
       "ok": true,
       "trust_grade": "B",
       "signal": "WAIT",
-      "elapsed_s": 0.01
+      "elapsed_s": 0.02
     },
     {
       "symbol": "JPM",
